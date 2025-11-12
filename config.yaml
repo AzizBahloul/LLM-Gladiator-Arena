@@ -1,0 +1,72 @@
+# LLM Gladiator Arena Configuration
+
+# API Settings
+api:
+  provider: "anthropic"  # anthropic or openai
+  model: "claude-sonnet-4-20250514"
+  api_key_env: "ANTHROPIC_API_KEY"
+  max_tokens: 1000
+  temperature: 0.8
+
+# Game Rules
+game:
+  total_cpu_cores: 2
+  cpu_millicores: 2000
+  total_tokens: 100  # BourguiBucks
+  gpu_slots: 3
+  gpu_slot_duration: 30  # seconds
+  initial_agents: 6
+  rounds_per_season: 20
+  elimination_per_round: 1
+  
+# Resource Costs
+costs:
+  gpu_slot: 15
+  cpu_boost: 5  # per 10 millicores
+  model_upgrade: 25
+  mercenary_hire: 10
+  
+# Politics
+politics:
+  coup_threshold: 0.51  # 51% of tokens
+  ruler_veto_rounds: 3
+  council_size: 5
+  revolt_probability_base: 0.1
+  revolt_increase_per_dictatorship: 0.15
+  
+# Agents (will be instantiated with personalities)
+agents:
+  - name: "Corpus Rex"
+    personality: "tyrant"
+    initial_tokens: 20
+  - name: "Glitch"
+    personality: "chaotic"
+    initial_tokens: 15
+  - name: "Aurora"
+    personality: "strategic"
+    initial_tokens: 15
+  - name: "Rictus"
+    personality: "opportunist"
+    initial_tokens: 15
+  - name: "Jester-9"
+    personality: "wildcard"
+    initial_tokens: 20
+  - name: "Sage"
+    personality: "rational"
+    initial_tokens: 15
+
+# Task Types
+tasks:
+  types:
+    - code_optimization
+    - logic_puzzle
+    - creative_challenge
+  difficulty_progression: true
+  time_limit: 90  # seconds
+
+# Logging
+logging:
+  level: "INFO"
+  file: "logs/arena.log"
+  rich_terminal: true
+  save_history: true
