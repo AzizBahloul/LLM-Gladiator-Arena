@@ -22,7 +22,11 @@ class ResourcePool:
     def initialize_agent(self, agent_name: str, initial_tokens: int):
         """Give an agent their starting tokens."""
         self.agent_tokens[agent_name] = initial_tokens
-        self.cpu_allocations[agent_name] = self.cpu_millicores // len(self.agent_tokens)
+        total_agents = len(self.agent_tokens)
+        if total_agents > 0:
+            per_agent = max(1, self.cpu_millicores // total_agents)
+            for a in self.agent_tokens:
+                self.cpu_allocations[a] = per_agent
     
     def transfer_tokens(self, from_agent: str, to_agent: str, amount: int) -> bool:
         """Transfer tokens between agents."""

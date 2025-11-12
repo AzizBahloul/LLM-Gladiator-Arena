@@ -2,7 +2,7 @@
 """Main game orchestrator."""
 import time
 import random
-from typing import List, Dict
+from typing import List, Dict, Optional
 from models.agent import LLMAgent
 from core.resource_manager import ResourcePool
 from core.evaluator import evaluator
@@ -19,10 +19,11 @@ from utils.storage import storage
 class ArenaOrchestrator:
     """Orchestrates the entire LLM gladiator arena."""
     
-    def __init__(self, config: Dict):
+    def __init__(self, config: Dict, restore_state: Dict = None, gui=None):
         self.config = config
         self.round_num = 0
         self.season_complete = False
+        self.gui = gui  # Optional GUI instance
         
         # Initialize subsystems
         self.resource_manager = ResourcePool(
@@ -44,9 +45,35 @@ class ArenaOrchestrator:
         # Initialize agents
         self.agents: List[LLMAgent] = []
         self._initialize_agents()
+
+        # If a restore state was provided, apply it to the runtime
+        if restore_state:
+            # Restore round and season state
+            self.round_num = restore_state.get('round', self.round_num)
+            self.season_complete = restore_state.get('season_complete', self.season_complete)
+
+            # Restore resource manager snapshot if present
+            resources = restore_state.get('resources') or {}
+            if resources:
+                self.resource_manager.agent_tokens = resources.get('agent_tokens', {}).copy()
+                self.resource_manager.cpu_allocations = resources.get('cpu_allocations', {}).copy()
+                self.resource_manager.gpu_reservations = resources.get('gpu_reservations', self.resource_manager.gpu_reservations).copy()
+
+            # Restore agents' individual state
+            saved_agents = {a['name']: a for a in restore_state.get('agents', [])}
+            for agent in self.agents:
+                saved = saved_agents.get(agent.name)
+                if saved:
+                    agent.tokens = saved.get('tokens', agent.tokens)
+                    agent.is_alive = saved.get('is_alive', agent.is_alive)
+                    agent.is_ruler = saved.get('is_ruler', agent.is_ruler)
+                    agent.round_scores = saved.get('round_scores', agent.round_scores)
         
         logger.header("🏛️  LLM GLADIATOR ARENA INITIALIZED  🏛️")
         logger.drama(f"Starting with {len(self.agents)} agents competing for glory!")
+        
+        # Don't update GUI here - it hasn't been mounted yet
+        # It will be updated when run_season() is called
     
     def _initialize_agents(self):
         """Create all agents from config."""
@@ -54,18 +81,45 @@ class ArenaOrchestrator:
             agent = LLMAgent(
                 name=agent_config['name'],
                 personality=agent_config['personality'],
-                config=self.config
+                config=self.config,
+                model=agent_config.get('model')  # Pass agent-specific model
             )
             agent.tokens = agent_config['initial_tokens']
             self.agents.append(agent)
             
             # Register with resource manager
             self.resource_manager.initialize_agent(agent.name, agent.tokens)
+            
+            # Log which model this agent is using
+            logger.agent_action(agent.name, f"loaded with model", agent.model)
         
         # Crown initial ruler (highest starting tokens)
         ruler = max(self.agents, key=lambda a: a.tokens)
         ruler.is_ruler = True
         logger.ruler_crowned(ruler.name)
+    
+    def _update_gui(self):
+        """Update GUI with current game state."""
+        if not self.gui:
+            return
+        
+        # Use call_from_thread to safely update GUI from background thread
+        try:
+            # Update agents
+            agent_data = [a.to_dict() for a in self.agents]
+            self.gui.call_from_thread(self.gui.update_agents, agent_data)
+            
+            # Update round
+            self.gui.call_from_thread(self.gui.update_round, self.round_num)
+            
+            # Update resources
+            alive_agents = [a for a in self.agents if a.is_alive]
+            cpu_usage = min(100, len(alive_agents) * 15)  # Simulate CPU usage
+            gpu_usage = min(100, len(alive_agents) * 20)  # Simulate GPU usage
+            token_pool = self.resource_manager.total_tokens
+            self.gui.call_from_thread(self.gui.update_resources, cpu_usage, gpu_usage, token_pool)
+        except Exception:
+            pass  # Ignore GUI update errors
     
     def run_season(self):
         """Run a complete season."""
@@ -75,10 +129,15 @@ class ArenaOrchestrator:
             self.round_num = round_num
             logger.round_start(round_num)
             
+            if self.gui:
+                self.gui.call_from_thread(self.gui.add_event, f"═══ ROUND {round_num} BEGINS ═══", "bold cyan")
+            
             # Check if game over
             alive = [a for a in self.agents if a.is_alive]
             if len(alive) <= 1:
                 logger.drama("Only one agent remains!")
+                if self.gui:
+                    self.gui.call_from_thread(self.gui.add_drama_event, "Only one agent remains!")
                 self.season_complete = True
                 break
             
@@ -88,6 +147,10 @@ class ArenaOrchestrator:
             self._phase_scoring_and_rewards()
             self._phase_elimination()
             self._phase_post_round_drama()
+            
+            # Update GUI
+            if self.gui:
+                self._update_gui()
             
             # Save state
             self._save_round_state()
@@ -100,6 +163,9 @@ class ArenaOrchestrator:
     def _phase_pre_round_politics(self):
         """Pre-round: Alliances, coups, and strategy."""
         logger.header("⚡ Political Phase", "bold blue")
+        
+        if self.gui:
+            self.gui.call_from_thread(self.gui.add_event, "⚡ Political maneuvering begins...", "blue")
         
         # Check for possible coups
         ruler = next((a for a in self.agents if a.is_ruler), None)
@@ -116,6 +182,11 @@ class ArenaOrchestrator:
                     # Failed coup might hurt conspirators
                     for name in conspirators:
                         self.resource_manager.agent_tokens[name] = max(0, self.resource_manager.agent_tokens[name] - 5)
+                    if self.gui:
+                        self.gui.call_from_thread(self.gui.add_drama_event, f"Coup attempt against {ruler.name} FAILED!")
+                else:
+                    if self.gui:
+                        self.gui.call_from_thread(self.gui.add_drama_event, f"{ruler.name} overthrown in COUP!")
         
         # Random alliance proposals
         proposals = self.alliance_manager.propose_random_alliances(self.agents, self.resource_manager)
@@ -130,14 +201,22 @@ class ArenaOrchestrator:
                 self.alliance_manager.create_alliance([proposer.name, target.name], self.round_num)
                 proposer.alliances.append(target.name)
                 target.alliances.append(proposer.name)
+                if self.gui:
+                    self.gui.call_from_thread(self.gui.add_alliance_event, f"{proposer.name} & {target.name} form alliance!")
     
     def _phase_task_execution(self):
         """Main task phase."""
         logger.header("🎯 Challenge Phase", "bold cyan")
         
+        if self.gui:
+            self.gui.call_from_thread(self.gui.add_event, "🎯 Challenge commences!", "cyan")
+        
         # Generate task
         task = self.task_generator.generate_round_task()
         logger.task_announcement(task.get_metadata()['type'])
+        
+        if self.gui:
+            self.gui.call_from_thread(self.gui.add_combat_event, f"Task: {task.get_metadata()['type']}")
         
         # Each agent solves
         responses = {}
@@ -146,6 +225,8 @@ class ArenaOrchestrator:
                 logger.agent_action(agent.name, "solving task...")
                 response = agent.solve_task(task.get_prompt())
                 responses[agent.name] = response
+                if self.gui:
+                    self.gui.call_from_thread(self.gui.add_event, f"{agent.name} completes challenge...", "white")
         
         # Evaluate all responses
         self.round_scores = {}
@@ -165,12 +246,17 @@ class ArenaOrchestrator:
         """Award tokens based on performance."""
         logger.header("💰 Rewards Phase", "bold green")
         
+        if self.gui:
+            self.gui.call_from_thread(self.gui.add_event, "💰 Rewards distributed...", "green")
+        
         # Calculate rewards
         rewards = evaluator.calculate_round_rewards(self.round_scores)
         
         for agent_name, tokens in rewards.items():
             self.resource_manager.award_tokens(agent_name, tokens)
             logger.agent_action(agent_name, f"earned {tokens} tokens")
+            if self.gui:
+                self.gui.call_from_thread(self.gui.add_event, f"{agent_name} earned {tokens} BB", "green")
         
         # Update agent tokens
         for agent in self.agents:
@@ -194,9 +280,14 @@ class ArenaOrchestrator:
         """Eliminate bottom performer(s)."""
         logger.header("⚔️  Elimination Phase", "bold red")
         
+        if self.gui:
+            self.gui.call_from_thread(self.gui.add_event, "⚔️  Elimination phase begins...", "red")
+        
         alive = [a for a in self.agents if a.is_alive]
         if len(alive) <= 3:  # Don't eliminate if 3 or fewer
             logger.drama("Too few agents remain - no elimination this round")
+            if self.gui:
+                self.gui.call_from_thread(self.gui.add_event, "Mercy granted - no elimination", "yellow")
             return
         
         # Find bottom performers
@@ -209,6 +300,9 @@ class ArenaOrchestrator:
         agent1 = next(a for a in self.agents if a.name == bottom_agents[0])
         agent2 = next(a for a in self.agents if a.name == bottom_agents[1])
         
+        if self.gui:
+            self.gui.call_from_thread(self.gui.add_combat_event, f"{agent1.name} vs {agent2.name} - DUEL!")
+        
         # Generate a quick duel task
         duel_task = self.task_generator.generate_round_task()
         
@@ -218,20 +312,22 @@ class ArenaOrchestrator:
         
         # Eliminate loser
         loser = next(a for a in self.agents if a.name == loser_name)
+        was_ruler = loser.is_ruler
         loser.is_alive = False
         loser.is_ruler = False
-        
         logger.elimination(loser_name, "Lost elimination duel")
         
-        # Remove from alliances and resources
+        if self.gui:
+            self.gui.call_from_thread(self.gui.add_elimination_event, loser_name)
+        
         self.alliance_manager.remove_agent_from_all(loser_name)
         self.resource_manager.remove_agent(loser_name)
-        
-        # If ruler was eliminated, elect new ruler
-        if loser.is_ruler:
+        if was_ruler:
             alive = [a for a in self.agents if a.is_alive]
             if alive:
                 new_ruler = self.voting_system.elect_ruler(alive, self.resource_manager)
+                if self.gui:
+                    self.gui.call_from_thread(self.gui.add_drama_event, f"{new_ruler.name} becomes the new RULER!")
     
     def _phase_post_round_drama(self):
         """Generate random dramatic events."""
@@ -261,6 +357,11 @@ class ArenaOrchestrator:
             winner = max(alive, key=lambda a: a.tokens)
             finale_msg = self.event_generator.generate_finale_drama(winner.name, self.agents)
             logger.drama(finale_msg)
+            
+            if self.gui:
+                self.gui.call_from_thread(self.gui.add_victory_event, winner.name)
+                self.gui.call_from_thread(self.gui.add_drama_event, finale_msg)
+            
             logger.final_summary(
                 winner.name,
                 self.round_num,
@@ -268,3 +369,5 @@ class ArenaOrchestrator:
             )
         else:
             logger.drama("No survivors... the arena claims all.")
+            if self.gui:
+                self.gui.call_from_thread(self.gui.add_drama_event, "No survivors... the arena claims all.")

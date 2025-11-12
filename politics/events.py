@@ -1,7 +1,7 @@
 #politics/events.py
 """Dramatic event generator."""
 import random
-from typing import List, Dict
+from typing import List, Dict, Optional
 from utils.logger import logger
 
 class EventGenerator:

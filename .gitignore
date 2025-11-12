@@ -10,9 +10,7 @@ env/
 ENV/
 .venv
 
-# Environment
-.env
-.env.local
+ 
 
 # Logs and data
 logs/
