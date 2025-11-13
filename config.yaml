@@ -1,100 +1,78 @@
-# LLM Gladiator Arena Configuration
-
-# API Settings
 api:
-  provider: "ollama"  # anthropic or ollama
-  model: "llama3.2:3b"  # Default model
-  api_key_env: "ANTHROPIC_API_KEY"  # Only for Anthropic
-  ollama_url: "http://localhost:11434"
+  provider: ollama
+  model: llama3.2:3b
+  api_key_env: ANTHROPIC_API_KEY
+  ollama_url: http://localhost:11434
   max_tokens: 1000
   temperature: 0.9
-  
-# Available Ollama Models (auto-pulled if missing)
 ollama_models:
-  - "llama3.2:3b"
-  - "llama3.2:1b" 
-  - "mistral:7b"
-  - "phi3:mini"
-  - "gemma2:2b"
-  - "qwen2.5:3b"
-  - "deepseek-r1:1.5b"
-  - "neural-chat:7b"
-
-# Game Rules
+- llama3.2:1b
+- phi3:mini
+- qwen2.5:0.5b
+- gemma2:2b
+- tinyllama:latest
+- mistral:latest
 game:
   total_cpu_cores: 2
   cpu_millicores: 2000
-  total_tokens: 100  # BourguiBucks
+  total_tokens: 100
   gpu_slots: 3
-  gpu_slot_duration: 30  # seconds
+  gpu_slot_duration: 30
   initial_agents: 6
   rounds_per_season: 30
   elimination_per_round: 1
   min_agents_to_continue: 2
-  
-# Resource Costs
 costs:
   gpu_slot: 15
-  cpu_boost: 5  # per 10 millicores
+  cpu_boost: 5
   model_upgrade: 25
   mercenary_hire: 10
-  
-# Politics
 politics:
-  coup_threshold: 0.51  # 51% of tokens
+  coup_threshold: 0.51
   ruler_veto_rounds: 3
   council_size: 5
   revolt_probability_base: 0.15
   revolt_increase_per_dictatorship: 0.2
-  
-# Agents (will be instantiated with personalities)
-# Models will be assigned automatically based on GPU capacity
 agents:
-  - name: "Corpus Rex"
-    personality: "tyrant"
-    initial_tokens: 20
-    model: null  # Auto-assigned
-  - name: "Glitch"
-    personality: "chaotic"
-    initial_tokens: 15
-    model: null  # Auto-assigned
-  - name: "Aurora"
-    personality: "strategic"
-    initial_tokens: 15
-    model: null  # Auto-assigned
-  - name: "Rictus"
-    personality: "opportunist"
-    initial_tokens: 15
-    model: null  # Auto-assigned
-  - name: "Jester-9"
-    personality: "wildcard"
-    initial_tokens: 20
-    model: null  # Auto-assigned
-  - name: "Sage"
-    personality: "rational"
-    initial_tokens: 15
-    model: null  # Auto-assigned
-
-# Task Types
+- name: Corpus Rex
+  personality: tyrant
+  initial_tokens: 20
+  model: null
+- name: Glitch
+  personality: chaotic
+  initial_tokens: 15
+  model: null
+- name: Aurora
+  personality: strategic
+  initial_tokens: 15
+  model: null
+- name: Rictus
+  personality: opportunist
+  initial_tokens: 15
+  model: null
+- name: Jester-9
+  personality: wildcard
+  initial_tokens: 20
+  model: null
+- name: Sage
+  personality: rational
+  initial_tokens: 15
+  model: null
 tasks:
   types:
-    - code_optimization
-    - logic_puzzle
-    - creative_challenge
+  - code_optimization
+  - logic_puzzle
+  - creative_challenge
   difficulty_progression: true
-  time_limit: 90  # seconds
-
-# Animation Settings
+  time_limit: 90
 animation:
   enabled: true
   fps: 30
   intro_duration: 5
   transition_duration: 2
-  
-# Logging
 logging:
-  level: "INFO"
-  file: "logs/arena.log"
+  level: INFO
+  file: logs/arena.log
   rich_terminal: true
   save_history: true
-  save_interval: 1  # Save every N rounds
+  save_interval: 1

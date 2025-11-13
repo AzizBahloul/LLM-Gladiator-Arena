@@ -21,10 +21,35 @@ import platform
 import time
 from pathlib import Path
 from typing import Dict, Any, List
+import yaml
 from utils.logger import logger
 from utils.storage import storage
 from utils.gpu_utils import gpu_manager
 from utils.model_selector import select_models_cli, get_models_for_gpu
+
+def save_models_to_config(models: List[str], config_path: str = 'config.yaml'):
+    """Save selected models to config.yaml for reuse.
+    
+    Args:
+        models: List of model names to save
+        config_path: Path to config file
+    """
+    try:
+        # Read current config
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        
+        # Update ollama_models
+        config['ollama_models'] = models
+        
+        # Write back to file
+        with open(config_path, 'w') as f:
+            yaml.safe_dump(config, f, default_flow_style=False, sort_keys=False)
+        
+        return True
+    except Exception as e:
+        print(f"⚠️  Warning: Could not save models to config: {e}")
+        return False
 
 def pull_multiple_models(models: List[str], ollama_url: str = 'http://localhost:11434', auto_pull: bool = False):
     """Pull multiple models, showing which ones need to be downloaded.
@@ -376,10 +401,41 @@ def main():
         print("🏛️  MODEL ASSIGNMENT FOR GLADIATORS")
         print("="*70)
         
-        gpu_memory = gpu_capacity.get('memory_gb', 4.0) if gpu_info['available'] else 4.0
+        # Check if models are already configured
+        configured_models = config.get('ollama_models', [])
         
-        # Interactive model selection with arrow keys
-        selected_models = select_models_cli(gpu_memory, config['game']['initial_agents'])
+        if configured_models and len(configured_models) >= config['game']['initial_agents']:
+            # Use existing configuration
+            print("\n✓ Using saved model configuration from config.yaml")
+            selected_models = configured_models[:config['game']['initial_agents']]
+            
+            print("\n📋 Configured Models:")
+            for i, model in enumerate(selected_models, 1):
+                print(f"   {i}. {model}")
+            
+            # Ask if user wants to change
+            print(f"\n{'─'*70}")
+            change = input("Keep these models? (Y/n): ").strip().lower()
+            
+            if change in ['n', 'no']:
+                print("\n🔄 Starting model selection...")
+                gpu_memory = gpu_capacity.get('memory_gb', 4.0) if gpu_info['available'] else 4.0
+                selected_models = select_models_cli(gpu_memory, config['game']['initial_agents'])
+                
+                if selected_models:
+                    # Save new selection to config
+                    save_models_to_config(selected_models)
+                    print("\n✓ New model selection saved to config.yaml")
+        else:
+            # No models configured, run selection
+            print("\n📝 No models configured. Starting interactive selection...")
+            gpu_memory = gpu_capacity.get('memory_gb', 4.0) if gpu_info['available'] else 4.0
+            selected_models = select_models_cli(gpu_memory, config['game']['initial_agents'])
+            
+            if selected_models:
+                # Save selection to config
+                save_models_to_config(selected_models)
+                print("\n✓ Model selection saved to config.yaml")
         
         if not selected_models:
             # Fallback: use auto-selected models
