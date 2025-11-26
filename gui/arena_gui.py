@@ -3,8 +3,9 @@
 from datetime import datetime
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
-from textual.widgets import Header, Footer, Static, Label, ProgressBar, DataTable, Log, Button
+from textual.widgets import Header, Footer, Static, Label, ProgressBar, DataTable, Log, Button, Input
 from textual.reactive import reactive
+from textual.message import Message as TextualMessage
 from rich.text import Text
 from rich.table import Table
 from rich.panel import Panel
@@ -99,6 +100,81 @@ class EventLog(Static):
         return Panel(text, title="[bold red]Arena Chronicle[/]", border_style="red", height=15)
 
 
+class ChatPanel(Static):
+    """Real-time chat panel showing agent discussions."""
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.messages = []
+        self.max_messages = 50
+    
+    def add_chat_message(self, sender: str, content: str, msg_type: str = "public"):
+        """Add a chat message to the display."""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        # Color and emoji based on message type
+        type_styles = {
+            "public": ("💬", "white"),
+            "private": ("🔒", "blue"),
+            "alliance": ("🤝", "cyan"),
+            "broadcast": ("📢", "yellow"),
+            "taunt": ("🔥", "red"),
+            "strategy": ("🎯", "magenta"),
+            "whisper": ("👂", "dim"),
+            "system": ("⚡", "green"),
+        }
+        
+        emoji, style = type_styles.get(msg_type, ("💬", "white"))
+        
+        self.messages.append({
+            'timestamp': timestamp,
+            'sender': sender,
+            'content': content,
+            'emoji': emoji,
+            'style': style,
+            'type': msg_type
+        })
+        
+        # Keep only recent messages
+        if len(self.messages) > self.max_messages:
+            self.messages.pop(0)
+        
+        self.refresh()
+    
+    def render(self) -> RenderableType:
+        """Render the chat panel."""
+        text = Text()
+        
+        if not self.messages:
+            text.append("💬 Waiting for agents to speak...\n", style="dim italic")
+            text.append("\nModels will discuss strategies,\n", style="dim")
+            text.append("form alliances, and taunt rivals\n", style="dim")
+            text.append("in real-time here!", style="dim")
+        else:
+            for msg in self.messages[-15:]:  # Show last 15 messages
+                # Timestamp
+                text.append(f"[{msg['timestamp']}] ", style="dim")
+                # Emoji and sender
+                text.append(f"{msg['emoji']} ", style=msg['style'])
+                text.append(f"{msg['sender']}", style=f"bold {msg['style']}")
+                text.append(": ", style="dim")
+                # Content
+                text.append(f"{msg['content']}\n", style=msg['style'])
+        
+        return Panel(
+            text, 
+            title="[bold cyan]💬 Agent Chat[/]", 
+            subtitle="[dim]Real-time discussions[/]",
+            border_style="cyan", 
+            height=20
+        )
+    
+    def clear(self):
+        """Clear all messages."""
+        self.messages = []
+        self.refresh()
+
+
 class ResourceBar(Static):
     """Display resource utilization."""
     
@@ -155,19 +231,25 @@ class ArenaGUI(App):
     }
     
     #left-panel {
-        width: 30%;
+        width: 22%;
         height: 100%;
         layout: vertical;
     }
     
     #center-panel {
-        width: 45%;
+        width: 38%;
+        height: 100%;
+        layout: vertical;
+    }
+    
+    #chat-panel {
+        width: 25%;
         height: 100%;
         layout: vertical;
     }
     
     #right-panel {
-        width: 25%;
+        width: 15%;
         height: 100%;
         layout: vertical;
     }
@@ -183,6 +265,11 @@ class ArenaGUI(App):
     }
     
     EventLog {
+        height: 50%;
+        margin: 1;
+    }
+    
+    ChatPanel {
         height: 100%;
         margin: 1;
     }
@@ -208,6 +295,7 @@ class ArenaGUI(App):
         self.restore_state = None
         self.status_panel = None
         self.event_log = None
+        self.chat_panel = None
         self.resource_bar = None
         self.agents_container = None
         self.game_thread = None
@@ -229,6 +317,11 @@ class ArenaGUI(App):
                 self.event_log = EventLog()
                 yield self.event_log
             
+            # Chat panel: Real-time agent discussions
+            with Vertical(id="chat-panel"):
+                self.chat_panel = ChatPanel()
+                yield self.chat_panel
+            
             # Right panel: Status and resources
             with Vertical(id="right-panel"):
                 self.status_panel = StatusPanel()
@@ -238,9 +331,9 @@ class ArenaGUI(App):
                 yield self.resource_bar
                 
                 yield Static(
-                    "[dim]💀 Dark stories unfold...\n"
-                    "⚔️  Alliances shift...\n"
-                    "🔥 Survival is everything...[/]",
+                    "[dim]💀 Dark stories...\n"
+                    "⚔️  Alliances shift\n"
+                    "🔥 Survival...[/]",
                     classes="flavor-text"
                 )
         
@@ -334,6 +427,31 @@ class ArenaGUI(App):
         """Add an event to the log."""
         if self.event_log:
             self.event_log.add_event(event, style)
+    
+    def add_chat_message(self, sender: str, content: str, msg_type: str = "public"):
+        """Add a chat message to the chat panel."""
+        if self.chat_panel:
+            self.chat_panel.add_chat_message(sender, content, msg_type)
+    
+    def add_discussion_message(self, sender: str, content: str):
+        """Add a discussion message (shorthand for public chat)."""
+        self.add_chat_message(sender, content, "public")
+    
+    def add_taunt_message(self, sender: str, content: str):
+        """Add a taunt message to chat."""
+        self.add_chat_message(sender, content, "taunt")
+    
+    def add_strategy_message(self, sender: str, content: str):
+        """Add a strategic message to chat."""
+        self.add_chat_message(sender, content, "strategy")
+    
+    def add_alliance_chat(self, sender: str, content: str):
+        """Add an alliance chat message."""
+        self.add_chat_message(sender, content, "alliance")
+    
+    def add_system_message(self, content: str):
+        """Add a system message to chat."""
+        self.add_chat_message("ARENA", content, "system")
     
     def add_drama_event(self, event: str):
         """Add a dramatic event."""

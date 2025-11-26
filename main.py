@@ -1,17 +1,4 @@
 # main.py
-"""Enhanced entry point with full state restoration and Ollama support.
-
-This file now performs two convenience tasks at startup:
- - Ensures Python dependencies from `requirements.txt` are installed into
-     the currently active Python interpreter/virtualenv.
- - Provides improved checks for the Ollama server and will attempt to
-     start `ollama serve` automatically if the `ollama` binary exists.
-
-The approach is conservative: package installation uses the active
-interpreter (sys.executable -m pip install -r requirements.txt). System
-package installs (like the Ollama binary) are not attempted automatically
-because they require elevated privileges and platform-specific steps.
-"""
 
 import os
 import sys

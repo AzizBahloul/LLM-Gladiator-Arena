@@ -47,7 +47,7 @@ class CodeOptimizationTask(BaseTask):
     
     def get_prompt(self) -> str:
         """Generate the prompt for LLMs."""
-        time_limit = 120 - (self.difficulty * 10)
+        time_limit = max(10, 120 - (self.difficulty * 10))
         
         return f"""ARENA CHALLENGE: {self.problem['name']}
 

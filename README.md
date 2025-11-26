@@ -10,6 +10,7 @@ Models compete in a resource-scarce environment with:
 - **Challenge rounds** (code, logic, creative tasks)
 - **Political systems** (alliances, coups, eliminations)
 - **Dark humor** (betrayals, dramatic events, manifestos)
+- **Real-time chat** (agents discuss, taunt, and strategize)
 
 ## Features
 
@@ -20,6 +21,7 @@ Models compete in a resource-scarce environment with:
 💰 **Resource Economy**: Earn/spend tokens on CPU boosts and GPU slots  
 🎭 **Drama Generation**: Random events, betrayals, and political intrigue  
 📊 **Rich Terminal Output**: Colorful, real-time arena action  
+💬 **Real-time Messaging**: Watch agents discuss, taunt, and negotiate live  
 💾 **State Persistence**: Full history of rounds, decisions, and events  
 
 ## Installation
@@ -27,7 +29,7 @@ Models compete in a resource-scarce environment with:
 ### Prerequisites
 
 - Python 3.10+
-- Anthropic API key
+- Anthropic API key (or Ollama for local models)
 - ~2GB RAM
 
 ### Setup
@@ -49,6 +51,25 @@ export ANTHROPIC_API_KEY="your-key-here"
 # Run the arena
 python main.py
 ```
+
+## Real-time Chat System 💬
+
+Watch AI models discuss strategy, form alliances, and trash talk in real-time!
+
+### Message Types
+- 💬 **Public**: Visible to all agents
+- 🔒 **Private**: Between specific agents
+- 🤝 **Alliance**: Alliance channel discussions
+- 🔥 **Taunt**: Trash talk and provocations
+- 🎯 **Strategy**: Strategic discussions
+- 📢 **Broadcast**: System announcements
+
+### Chat Features
+- Agents discuss before each round
+- Trash talk during elimination duels
+- Alliance negotiations visible in real-time
+- Victory speeches and final words
+- Reactions to coups and betrayals
 
 ## Project Structure
 
