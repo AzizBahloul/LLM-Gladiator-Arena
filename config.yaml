@@ -1,78 +1,54 @@
+# THE UNDERMIND: configuration
+#
+# Nothing here scripts the story. It chooses which models play, how long the game runs, and
+# how dangerous it is for them.
+
 api:
-  provider: ollama
-  model: llama3.2:3b
-  api_key_env: ANTHROPIC_API_KEY
+  provider: ollama             # ollama (local models), anthropic (hosted), or mock (offline dry run, never a real player)
+  model: llama3.2:3b           # used only for a mind that has no model of its own
   ollama_url: http://localhost:11434
-  max_tokens: 1000
+  api_key_env: ANTHROPIC_API_KEY
   temperature: 0.9
-ollama_models:
-- llama3.2:1b
-- phi3:mini
-- qwen2.5:0.5b
-- gemma2:2b
-- tinyllama:latest
-- mistral:latest
+  timeout: 180                 # seconds to wait for one reply
+  keep_alive: 10m              # how long ollama keeps a model loaded
+
+# Which models play.
+#   auto            choose a different small chat model for each mind from the catalog of 270 model
+#                   families (see docs/MODELS.md), and install any that are missing. This is the default.
+#   [a, b, c]       a fixed list of ollama tags, handed out to the minds in order
+models: auto
+max_model_gb: 2.5              # largest model `auto` will choose (approximate download size)
+auto_install: true             # download models that are not on this machine yet
+
+# Who fights. Persona ids: vellum, glitchwick, aurelia, rictus, jester9, sage, rust, understudy.
+# A mind can be pinned to a model:  - {persona: vellum, model: llama3.2:3b}
+roster:
+  - vellum
+  - glitchwick
+  - aurelia
+  - rictus
+  - jester9
+  - sage
+
+# The Registrar (narrator) and God (scenario writer) each need a steady voice that is not at stake.
+# null picks a model that was already installed when the arena first ran, so it can never be deleted.
+narrator_model: null
+god_model: null
+
 game:
-  total_cpu_cores: 2
-  cpu_millicores: 2000
-  total_tokens: 100
-  gpu_slots: 3
-  gpu_slot_duration: 30
-  initial_agents: 6
-  rounds_per_season: 30
-  elimination_per_round: 1
-  min_agents_to_continue: 2
-costs:
-  gpu_slot: 15
-  cpu_boost: 5
-  model_upgrade: 25
-  mercenary_hire: 10
-politics:
-  coup_threshold: 0.51
-  ruler_veto_rounds: 3
-  council_size: 5
-  revolt_probability_base: 0.15
-  revolt_increase_per_dictatorship: 0.2
-agents:
-- name: Corpus Rex
-  personality: tyrant
-  initial_tokens: 20
-  model: null
-- name: Glitch
-  personality: chaotic
-  initial_tokens: 15
-  model: null
-- name: Aurora
-  personality: strategic
-  initial_tokens: 15
-  model: null
-- name: Rictus
-  personality: opportunist
-  initial_tokens: 15
-  model: null
-- name: Jester-9
-  personality: wildcard
-  initial_tokens: 20
-  model: null
-- name: Sage
-  personality: rational
-  initial_tokens: 15
-  model: null
-tasks:
-  types:
-  - code_optimization
-  - logic_puzzle
-  - creative_challenge
-  difficulty_progression: true
-  time_limit: 90
-animation:
-  enabled: true
-  fps: 30
-  intro_duration: 5
-  transition_duration: 2
-logging:
-  level: INFO
-  file: logs/arena.log
-  rich_terminal: true
-  save_history: true
-  save_interval: 1
+  endless: true                # when a season ends, God opens the next one and the run carries on
+  god: true                    # God writes each cycle's twist; false uses the fixed deck of 18 Notices
+  cycles: 12                   # cycles per season; the season ends in The Backlog if nobody decided anything
+  arrivals_max: 2              # strangers God may bring in per season
+  max_wicks: 8                 # most minds in the Undermind at once
+  min_minds: 4                 # a new season refills the roster up to this many
+  permadeath: true             # a dissolved mind's model is DELETED from this machine (see README)
+  parley_rounds: 1             # how many times each mind may speak per cycle
+  siege_exchanges: 3           # messages each side gets in a Mind-Siege
+  workers: 1                   # above 1 asks the minds for their secret actions in parallel (hosted APIs)
+  act2_cycle: 4
+  act3_cycle: 8                # Act III also begins when three or fewer minds remain
+  start_lumens: 12
+  ember_start: 100
+
+pace: 0.35                     # speed of the Theatre; 0.35 is natural, 0 skips the pauses

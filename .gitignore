@@ -10,7 +10,6 @@ env/
 ENV/
 .venv
 
- 
 
 # Logs and data
 logs/
@@ -38,12 +37,7 @@ dist/
 build/
 *.egg-info/
 
-# ==========================================
-# .env.example
-# Copy this to .env and fill in your key
+# Local secrets
+.env
 
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-
-# Optional: Override config values
-# ARENA_ROUNDS=10
-# ARENA_AGENTS=4
+# The arena's saved runs, model ledger and partial journals live in data/ (ignored above)

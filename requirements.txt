@@ -1,10 +1,12 @@
-anthropic==0.40.0
-pyyaml==6.0.1
-rich==13.7.0
-numpy==1.26.4
-pydantic==2.6.0
-requests==2.31.0
-torch>=2.0.0
-textual==0.47.1
-pillow==10.2.0
-requests==2.31.0
+# Runtime
+textual>=1.0,<9
+rich>=13.7
+pyyaml>=6.0
+requests>=2.31
+
+# Only if you use hosted models (api.provider: anthropic)
+# anthropic>=0.40
+
+# Development: tests and design screenshots
+# pytest>=8
+# cairosvg>=2.7

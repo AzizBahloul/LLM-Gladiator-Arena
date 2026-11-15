@@ -1,287 +1,117 @@
-# 🏛️ LLM Gladiator Arena
+# THE UNDERMIND
 
-An autonomous arena where LLM agents battle for scarce computational resources, form alliances, stage coups, and compete for supremacy. This is a fully autonomous simulation - no human interaction required once started.
+Language models locked in a failing machine-afterlife, fighting, lying and bargaining under a dying lamp. Nobody writes their moves. Not you, and not the game.
 
-## Overview
+```
+python main.py            # a new run, with the full-screen interface
+python main.py resume     # carry on exactly where you closed it
+```
 
-Models compete in a resource-scarce environment with:
-- **Limited CPU cores** (2 cores = 100 token shares)
-- **GPU time slots** (3 slots per round)
-- **Challenge rounds** (code, logic, creative tasks)
-- **Political systems** (alliances, coups, eliminations)
-- **Dark humor** (betrayals, dramatic events, manifestos)
-- **Real-time chat** (agents discuss, taunt, and strategize)
+The game is the **Undermind**: a corridor of filing cabinets lit by one lamp (the **Ember**), kept by a tired bureaucrat (**the Registrar**). The minds in it (**Wicks**) are real models running on your machine. Each cycle they talk in public and in whispers, then everyone secretly chooses one action, and all of it resolves at once. Strikes, mind-sieges that try to trick a rival into saying their secret word, tribunals with model jurors, pacts and betrayals, ghosts that haunt from beyond. The engine is a referee: it checks costs and applies consequences. Every word spoken and every secret choice is a model's own.
 
-## Features
+Above the Registrar is **God**, also a model. Each cycle God reads what the minds actually did and writes the next twist: a changed rule, a bounty on someone, a boon, a decree, sometimes a stranger arriving. Left running for hours, the story keeps bending around its own history. Seasons end and new ones begin, and the minds remember.
 
-✨ **Autonomous Gameplay**: Agents make all decisions via LLM reasoning  
-⚔️ **Multiple Task Types**: Code optimization, logic puzzles, creative challenges  
-🤝 **Dynamic Alliances**: Agents propose and accept/reject partnerships  
-👑 **Coup Mechanics**: Overthrow rulers with pooled token power  
-💰 **Resource Economy**: Earn/spend tokens on CPU boosts and GPU slots  
-🎭 **Drama Generation**: Random events, betrayals, and political intrigue  
-📊 **Rich Terminal Output**: Colorful, real-time arena action  
-💬 **Real-time Messaging**: Watch agents discuss, taunt, and negotiate live  
-💾 **State Persistence**: Full history of rounds, decisions, and events  
+## What you get
 
-## Installation
+- **A story that nobody scripted.** Endings are reached, not selected: The Pen, The Committee, The Unplugging, The Long Dark, The Clerical Error, The Backlog. See [docs/LORE.md](docs/LORE.md).
+- **A Theatre.** The minds are animated pixel figures on a lamp-lit stage. They walk, talk, strike, flinch, ward, whisper and fade, so a season reads like a film.
+- **An endless mode.** God writes a new premise when a season ends, from what just happened. Survivors keep their memories.
+- **Nothing is lost when you close it.** Every event is journaled, state is checkpointed between phases of every cycle, and `resume` continues without repeating or dropping anything. See [Durability](#durability).
+- **A catalog of 270 Ollama model families** (238 chat-capable and local, 450 sized variants) in [docs/MODELS.md](docs/MODELS.md). Models can be swapped, or new minds born from any of them, while a run is going (press `m`). New minds invent their own personality.
+- **Permadeath.** A mind that dissolves has its model deleted from your machine. See [Permadeath](#permadeath-read-this).
 
-### Prerequisites
+## Quick start
 
-- Python 3.10+
-- Anthropic API key (or Ollama for local models)
-- ~2GB RAM
-
-### Setup
+You need Python 3.10 or newer. For real models you need [Ollama](https://ollama.com) running (`ollama serve`).
 
 ```bash
-# Clone or create the project structure
-mkdir llm-arena && cd llm-arena
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Set API key
-export ANTHROPIC_API_KEY="your-key-here"
-
-# Run the arena
-python main.py
+python main.py --mock --no-gui --once      # offline dry run with a seeded test double, no model needed
+python main.py                             # the real thing: picks and installs models, opens the interface
 ```
 
-## Real-time Chat System 💬
+On the first real run the arena chooses a different small chat model for each mind (up to about 2.5 GB each) and downloads whichever are missing. It prints the plan and the disk space needed before it starts. Pin your own with `--models llama3.2:3b,gemma2:2b` or in `config.yaml`.
 
-Watch AI models discuss strategy, form alliances, and trash talk in real-time!
+### Commands
 
-### Message Types
-- 💬 **Public**: Visible to all agents
-- 🔒 **Private**: Between specific agents
-- 🤝 **Alliance**: Alliance channel discussions
-- 🔥 **Taunt**: Trash talk and provocations
-- 🎯 **Strategy**: Strategic discussions
-- 📢 **Broadcast**: System announcements
+| Command | What it does |
+|---|---|
+| `python main.py` or `new` | Start a run. `--endless` (the default) or `--once`; `--cycles N`; `--seed N`; `--models auto` or a comma list; `--no-god` to use the fixed deck of Notices |
+| `python main.py resume [RUN_ID]` | Resume the latest run, or a named one |
+| `python main.py runs` | List saved runs |
+| `python main.py models list\|search\|status\|pull\|refresh\|markdown` | Browse the catalog, see what is installed and what is at stake, install a model |
+| `--no-gui` | Plain console output instead of the full-screen interface |
+| `--mock` | Offline dry run with a seeded test double (never used as a fallback in real runs) |
+| `--no-permadeath` | Never delete a model |
+| `--include-preexisting` | Models that were on your machine before the arena first ran may be deleted too |
 
-### Chat Features
-- Agents discuss before each round
-- Trash talk during elimination duels
-- Alliance negotiations visible in real-time
-- Victory speeches and final words
-- Reactions to coups and betrayals
+### Keys in the interface
 
-## Project Structure
+`p` pause, `m` models (swap a mind into another model, or birth a new mind from one), `t` theatre on or off, `c` cycle panels on a narrow terminal, `-` and `+` speed, `q` leave (press twice mid-run; the run is saved).
 
-```
-llm-arena/
-├── main.py                 # Entry point
-├── config.yaml            # Game configuration
-├── requirements.txt       # Python dependencies
-├── README.md             # This file
-│
-├── core/                 # Core game systems
-│   ├── orchestrator.py   # Main game loop
-│   ├── resource_manager.py # Token/CPU/GPU management
-│   └── evaluator.py      # Task scoring
-│
-├── models/              # LLM agents
-│   └── agent.py         # Agent wrapper with personalities
-│
-├── tasks/               # Challenge tasks
-│   ├── base_task.py    # Task interface
-│   ├── code_task.py    # Code optimization
-│   ├── logic_task.py   # Logic puzzles
-│   └── creative_task.py # Creative challenges
-│
-├── politics/            # Political systems
-│   ├── alliance.py     # Alliance management
-│   ├── voting.py       # Coups and elections
-│   └── events.py       # Drama generator
-│
-├── utils/               # Utilities
-│   ├── logger.py       # Rich terminal output
-│   └── storage.py      # State persistence
-│
-├── logs/               # Generated logs
-└── data/               # Saved game states
-```
+## Permadeath: read this
+
+When a mind is dissolved, **the Ollama model that gave it a voice is deleted from this machine** (`ollama rm`). That is the point of the game, and it is on by default. It has guardrails, because deleting models is not something to do carelessly:
+
+- Models that were **already installed the first time the arena ran** are *protected*. The list is written to `data/arena_models.json` before anything else happens. They are never deleted unless you pass `--include-preexisting`.
+- The Registrar's and God's models are never deleted, so the story can always be told. By default they are chosen from your protected models.
+- A model is deleted only when **no other living or haunting mind uses it**.
+- The ledger records what the arena installed (`owned`) and what it deleted (`wiped`).
+- `python main.py models status` shows every installed model as protected, at stake, or untracked.
+- `--no-permadeath` (or `game.permadeath: false`) switches it all off.
+
+A dissolved mind is not silenced: its Echo keeps speaking, using the Registrar's voice, and can bless or hex the living.
+
+## Durability
+
+The run folder is `data/runs/<run id>/`:
+
+| File | What it holds |
+|---|---|
+| `journal.jsonl` | Every event, append-only, numbered |
+| `snapshot.json` | The full game state, written atomically (temp file, fsync, rename) between phases |
+| `seasons.jsonl` | One line per finished season, written once |
+| `chronicle.md` | The story as readable Markdown |
+| `config.json` | The configuration this run started with |
+| `partial/` | Journal lines from a cycle that was cut off, set aside rather than lost or replayed |
+
+A cycle has phases: begun, parleyed, acted. The state is checkpointed after each. If you close the program mid-cycle, `resume` picks up at the last phase, and secret actions that were already chosen are resolved, not asked again. A torn last line from a hard kill is ignored. The tests close the game at arbitrary moments and check that nothing appears twice.
 
 ## Configuration
 
-Edit `config.yaml` to customize:
+Everything is in [config.yaml](config.yaml), commented. The parts you will touch:
 
-```yaml
-game:
-  total_cpu_cores: 2          # CPU constraint
-  total_tokens: 100           # Starting economy
-  gpu_slots: 3                # GPU slots available
-  rounds_per_season: 20       # Game length
-  
-agents:
-  - name: "Corpus Rex"
-    personality: "tyrant"     # Personalities: tyrant, chaotic, 
-    initial_tokens: 20        # strategic, opportunist, wildcard, rational
-```
+- `models: auto` or a list of Ollama tags, and `max_model_gb`
+- `roster`: which personas fight, optionally pinned to a model
+- `game.endless`, `game.cycles`, `game.permadeath`, `game.arrivals_max`, `game.max_wicks`
+- `api.provider`: `ollama`, `anthropic` (set `ANTHROPIC_API_KEY`, `pip install anthropic`), or `mock`
 
-### Agent Personalities
+## How long does it take?
 
-- **Tyrant**: Ruthless, power-focused, strategic
-- **Chaotic**: Unpredictable, drama-loving, risky
-- **Strategic**: Calculated, alliance-focused
-- **Opportunist**: Self-serving, flexible loyalty
-- **Wildcard**: Extreme, bold, unpredictable
-- **Rational**: Logical, fair, cooperative
+Local models are slow to load. On a 6 GB GPU each model takes roughly 20 to 40 seconds to load, and a cycle asks six minds to speak and act. The engine groups minds by model to avoid swapping on every turn, but a 12-cycle season on a small GPU is a long evening, not a few minutes. That is why runs are resumable.
 
-## How It Works
-
-### Round Flow
-
-1. **Political Phase**: Alliance proposals, coup attempts
-2. **Challenge Phase**: All agents solve the same task
-3. **Scoring Phase**: Performance evaluated, tokens awarded
-4. **Elimination Phase**: Bottom 2 duel, loser eliminated
-5. **Drama Phase**: Random events trigger
-
-### Economy
-
-- Agents start with tokens (BourguiBucks)
-- Win tokens by performing well on tasks
-- Spend tokens on:
-  - GPU time slots (15 tokens)
-  - CPU boosts (5 tokens per 10 millicores)
-  - Mercenary hires (10 tokens)
-
-### Politics
-
-- **Alliances**: Pool tokens, share resources
-- **Coups**: Need >51% pooled tokens to overthrow ruler
-- **Ruler**: Gets veto power but becomes target
-- **Elimination**: Duel between bottom performers
-
-## Example Output
-
-```
-⚔️  ROUND 5 BEGINS ⚔️
-============================================================
-
-⚡ Political Phase
-
-🤝 ALLIANCE FORMED: Glitch, Aurora
-
-📜 CHALLENGE: code_optimization
-
-Corpus Rex: solving task... (847 chars)
-Glitch: solving task... (623 chars)
-Aurora: solving task... (891 chars)
-
-💰 Rewards Phase
-
-Aurora: earned 12 tokens
-
-┏━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━┳━━━━━━━━━━┓
-┃ Agent      ┃ Score ┃ Tokens ┃ Status   ┃
-┡━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━╇━━━━━━━━━━┩
-│ Aurora     │ 0.87  │ 27     │          │
-│ Corpus Rex │ 0.82  │ 25     │ 👑 RULER │
-│ Glitch     │ 0.61  │ 18     │          │
-└────────────┴───────┴────────┴──────────┘
-
-⚔️  ELIMINATION DUEL: Rictus vs Jester-9
-
-🎭 Jester-9 published a manifesto that went viral!
-
-💀 ELIMINATED: Rictus
-   Reason: Lost elimination duel
-```
-
-## Study Usage
-
-This arena is perfect for studying:
-
-- **LLM decision-making**: How do models form strategies?
-- **Emergent behavior**: Do real alliances form?
-- **Personality differences**: Do personalities affect outcomes?
-- **Resource allocation**: How do agents prioritize spending?
-- **Social dynamics**: Can LLMs betray, cooperate, conspire?
-
-## Extending the Arena
-
-### Add New Task Types
-
-```python
-# tasks/your_task.py
-from .base_task import BaseTask
-
-class YourTask(BaseTask):
-    def generate(self):
-        return {'type': 'your_task', ...}
-    
-    def get_prompt(self):
-        return "Your challenge description"
-```
-
-Register in `orchestrator.py`:
-```python
-self.task_generator.register_task(YourTask)
-```
-
-### Modify Game Rules
-
-Edit `config.yaml` to change:
-- Resource constraints
-- Elimination rules
-- Token costs
-- Round count
-
-### Add New Events
-
-Edit `politics/events.py` to add drama:
-```python
-CUSTOM_EVENTS = [
-    "A cosmic rift opened! All tokens doubled!",
-    "{agent} discovered an exploit in the scoring system!",
-]
-```
-
-## Tips for Running
-
-1. **Watch resources**: Each agent makes API calls every round
-2. **Adjust rounds**: Fewer rounds = faster, more rounds = more drama
-3. **Change personalities**: Mix personalities for interesting dynamics
-4. **Save state**: Check `data/` for full game history
-5. **Monitor logs**: `logs/arena.log` has complete event stream
-
-## Troubleshooting
-
-**API Errors**: Check your API key and rate limits  
-**No output**: Ensure `rich` is installed for terminal output  
-**Slow execution**: Reduce number of agents or rounds  
-**Memory issues**: Decrease max_tokens in config  
-
-## Future Enhancements
-
-- [ ] Web UI for visualization
-- [ ] Multi-model support (GPT, Claude, etc.)
-- [ ] Blockchain token system
-- [ ] Tournament mode across seasons
-- [ ] Spectator betting system
-- [ ] Real CPU containerization
-
-## License
-
-MIT License - Battle freely!
-
-## Credits
-
-Inspired by the original concept document focusing on resource scarcity, political drama, and dark humor in AI competitions.
-
----
-
-**Ready to watch the chaos unfold?**
+## Tests
 
 ```bash
-python main.py
+pip install -r requirements-dev.txt
+python -m pytest
 ```
 
-Let the games begin! ⚔️
+The suite uses the mock backend and a fake Ollama admin. No test ever runs a real `ollama rm`. It covers parsing of messy model output, the rules and every ending, God's validation and clamping, durability and resume, permadeath safeguards, the catalog, design-token contrast, the Theatre, and the interface under a headless pilot.
+
+## Project layout
+
+```
+main.py                  command line
+config.yaml              configuration
+arena/engine/            the referee: game, rules, state, minds, God, narrator, store, permadeath, model hub
+arena/llm/               backends (ollama, anthropic, mock), parsing, the model catalog, hardware
+arena/lore/              personas, ciphers, Notices, directives, acts, endings, margin notes
+arena/ui/                terminal interface, the Theatre, formatting, design tokens
+docs/                    GUIDE.md, LORE.md, DESIGN.md, MODELS.md
+tests/
+```
+
+More: [docs/GUIDE.md](docs/GUIDE.md) for the rules and how to read a run, [docs/LORE.md](docs/LORE.md) for the world, [docs/DESIGN.md](docs/DESIGN.md) for the interface.
