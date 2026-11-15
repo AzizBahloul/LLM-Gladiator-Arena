@@ -48,7 +48,7 @@ def test_wide_and_zero_width_text_never_shifts_theatre_rows():
     from arena.ui import theatre as T
     from tests.test_theatre import scene
     s = scene(6)
-    s.on_event(Event("speech", "漢字 ​ é 😀 hello \x1b[2J there", actor="Mind 0"))
+    s.on_event(Event("speech", "\u6f22\u5b57 \u200b \u00e9 \U0001F600 hello \x1b[2J there", actor="Mind 0"))
     for cols in (62, 100):
         out = T.render_frame(s, s.now + 0.5, cols, 14)
         assert all(cell_len(line) == cols for line in out.plain.split("\n"))
