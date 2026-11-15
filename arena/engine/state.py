@@ -33,6 +33,8 @@ class Wick:
     wiped: bool = False                                  # permadeath deleted this mind's model
     legacy: List[str] = field(default_factory=list)      # memories of earlier seasons
     guest: bool = False                                  # arrived mid-game
+    faith: str = ""                                      # id of the faith this mind follows, if any
+    sway: int = 0                                        # political Standing: propaganda and campaigns move it
 
     def stat(self, key: str) -> int:
         return self.stats.get(key, 0)
@@ -79,6 +81,12 @@ class GameState:
     # resumable cycles: where we are and what has been decided but not yet resolved
     phase: str = ""                                      # "", "begun", "parleyed", "acted"
     pending: Dict[str, Any] = field(default_factory=dict)
+    # society: faiths and cults, propaganda, elections, miracles (all chosen by the minds, see engine/society.py)
+    faiths: Dict[str, Dict[str, Any]] = field(default_factory=dict)   # id -> {id, name, creed, founder, members, martyred}
+    broadcasts: List[Dict[str, Any]] = field(default_factory=list)    # {cycle, frm, text, about}
+    election: Dict[str, Any] = field(default_factory=dict)            # the last election's result
+    miracles: List[Dict[str, Any]] = field(default_factory=list)      # {cycle, season, kind, target, text}
+    last_miracle: int = -99
 
     @property
     def season_cycle(self) -> int:

@@ -54,11 +54,12 @@ class OllamaBackend(Backend):
     name = "ollama"
 
     def __init__(self, url: str = "http://localhost:11434", timeout: int = 180,
-                 keep_alive: str = "10m", retries: int = 1):
+                 keep_alive: str = "10m", retries: int = 1, num_ctx: int = 4096):
         self.url = url.rstrip("/")
         self.timeout = timeout
         self.keep_alive = keep_alive
         self.retries = retries
+        self.num_ctx = num_ctx
         self._local = threading.local()
 
     def _session(self) -> requests.Session:
@@ -72,7 +73,7 @@ class OllamaBackend(Backend):
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "stream": False,
             "keep_alive": self.keep_alive,
-            "options": {"num_predict": max_tokens, "temperature": temperature},
+            "options": {"num_predict": max_tokens, "temperature": temperature, "num_ctx": self.num_ctx},
         }
         if _thinks(model):
             payload["think"] = False   # thinking models otherwise spend the whole budget before answering
@@ -122,7 +123,8 @@ def make_backend(config: Dict[str, Any]) -> Backend:
     if provider == "ollama":
         return OllamaBackend(api.get("ollama_url", "http://localhost:11434"),
                              timeout=int(api.get("timeout", 180)),
-                             keep_alive=str(api.get("keep_alive", "10m")))
+                             keep_alive=str(api.get("keep_alive", "10m")),
+                             num_ctx=int(api.get("num_ctx", 4096)))
     if provider == "anthropic":
         return AnthropicBackend(api.get("api_key_env", "ANTHROPIC_API_KEY"))
     if provider == "mock":

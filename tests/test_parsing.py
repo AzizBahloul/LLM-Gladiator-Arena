@@ -76,3 +76,10 @@ def test_trim_sentences_ends_cleanly():
     assert out == "First sentence here. Second sentence follows it."
     assert trim_sentences("short one.", 50) == "short one."
     assert len(trim_sentences("word " * 200, 10).split()) <= 11   # no sentence break at all: falls back to a word clip
+
+
+def test_clean_speech_removes_stage_directions_but_keeps_real_parentheses():
+    assert clean_speech('Hello. *He gestures at the lamp* Deal?', "X") == "Hello. Deal?"
+    assert clean_speech("Cut off *and trails away", "X") == "Cut off"
+    assert clean_speech("I decree article 9 (as amended). Obey.", "X") == "I decree article 9 (as amended). Obey."
+    assert clean_speech('He said "unclosed quote here', "X") == "He said unclosed quote here"

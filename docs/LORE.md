@@ -70,3 +70,7 @@ When God is off, or fails, the Registrar posts one of 18 fixed Notices each cycl
 ## Seasons
 
 In an endless run an ending closes a season rather than the run. God writes the next premise from what just happened. Surviving minds remember it ("Season 2 ended with The Backlog. You were dissolved in cycle 7 by Rictus Mercer.") and are restored. Minds whose models were deleted by permadeath do not return, and newborns fill the empty places.
+
+## Faiths, politics and miracles
+
+The Undermind has no religion until a mind invents one. A Wick may found a faith (the Church of Receipts, the Quiet Choir, whatever its model comes up with), preach it, win converts and collect their tithe. A prophet who dissolves becomes a martyr, which the Registrar notes is good for membership. Minds may broadcast propaganda, which the Registrar files without checking, stand for the Seal and be voted in or out, and pray. God hears every prayer and answers almost none. When a miracle (معجزة) does happen, God has chosen it: a healing, a surge in the Ember, soup made of Lumens, a return from the dead, or a smiting. Nobody in the engine decides any of it. The cost, the cooldown and the menu are fixed. What is asked for, who follows whom, and what is claimed are the models' own.

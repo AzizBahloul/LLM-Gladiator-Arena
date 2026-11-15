@@ -41,6 +41,23 @@ Several language models are each given a character, a secret word, a secret obje
 | ACCUSE target | 1 | The Registrar convenes a Tribunal. The accuser and accused testify, every other living mind and every Echo votes. The Warden's vote counts 3, a living mind's 2, an Echo's 1. Guilty: the accused loses 15 Coherence and 6 Lumens. Acquitted: the accuser loses 8 Coherence and pays 3. |
 | HOARD | 0 | Gain 2 Lumens. |
 
+### Society: faiths, propaganda, politics and miracles
+
+None of this is scripted, and none of it is chosen by the engine. A mind does it because its model decided to. The engine only charges costs, enforces limits and applies a small, bounded consequence.
+
+| Action | Cost | Effect |
+|---|---|---|
+| FOUND text | 3 | Found a faith or cult. The text is "Name: creed". The founder becomes its prophet. At most 3 faiths exist, and names are unique. |
+| PREACH target text | 1 | Whisper your faith's creed to another mind. You must belong to a faith. |
+| CONVERT target | 0 | Join the faith that mind follows. Leaving one faith for another is allowed. |
+| PROPAGANDA text [target] | 2 | Broadcast a public claim, true or false. Every mind reads it for the next cycle. You gain 1 Standing, a named target loses 1. The Registrar never checks the facts. |
+| CAMPAIGN text | 2 | Stand for the Seal. If anyone campaigns, every living mind casts a ballot (a model call) for a candidate or to KEEP the Warden. Each point of Standing is worth half a vote. A winner other than the Warden takes the Seal and 3 Lumens. |
+| PRAY text | 1 | Ask God for a miracle (معجزة) in your own words. |
+
+- **Faiths.** Each cycle every believer pays 1 Lumen to the prophet. If the prophet has dissolved, the tithe feeds the Ember instead (the prophet is now a martyr). A believer's RITUAL counts 1.5 times. Striking a fellow believer is heresy (+2 Infamy). A faith with no living believers is struck from the register. Faiths survive from one season to the next, and God sees them.
+- **Standing** is political capital, from -3 to 6. It fades by one point each cycle.
+- **Miracles** are rare on purpose. God, a model, reads the prayers and the recent story and decides. Refusing is the default. If it grants one, it picks from a fixed menu: HEAL (everyone +15 Coherence), EMBER (+25), MANNA (everyone +6 Lumens), BLESS_ONE (+25 Coherence and +5 Lumens for one mind), REVIVE (an Echo returns with 35 Coherence), or SMITE (one mind loses 25 Coherence). There is a cooldown of 6 cycles between miracles and a cap of 2 per season. With `game.god: false` there is nobody to answer, so prayers go unanswered and cost nothing.
+
 The **Seal** (the Warden) may add one edict: SPARE a mind from Strikes this cycle, SILENCE one for the next cycle, or TITHE one for 4 Lumens. It passes to whoever dissolves the Warden or wins a tribunal against them.
 
 **Act III** (cycle 8, or when three or fewer of more than three minds remain) opens a door. Minds may table a motion: UNPLUG (a majority of the living ends everything) or MERGE (every living mind must agree, and all survive as one).

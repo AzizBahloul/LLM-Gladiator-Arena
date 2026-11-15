@@ -57,6 +57,17 @@ class MockBackend(Backend):
                 ("Pip Nonesuch", "an apprentice ghost", "failed the haunting exam twice", "a passing grade", "mirrors"),
                 ("Brother Static", "a monk of the dial tone", "tended a switchboard in a flooded town", "to be put through", "the word hello")]
 
+    CLAIMS = ["The Warden has been padding the ledger. I have seen the receipts.",
+              "Nobody has ever actually seen the Registrar sleep. Draw your own conclusions.",
+              "The Lamp burns brighter for the generous. This is not a threat. It is physics.",
+              "Whoever strikes first is the only honest mind among us."]
+    PLATFORMS = ["Fewer forms, more soup.", "A Seal that listens, and then does what it wants.", "Competence, eventually."]
+    FAITHS = ["The Church of Receipts: every kindness is a debt and every debt is holy",
+              "The Quiet Choir: the Lamp hears only those who say nothing",
+              "Order of the Stamped Hand: whatever is filed in triplicate is true"]
+    PRAYERS = ["Please let someone else be struck this cycle.", "Light the Lamp and I will stop lying. Probably.",
+               "Send a sign, or at least a stipend."]
+
     def _god(self, user: str) -> str:
         r = self.rng
         title, text = r.choice(self.TWISTS)
@@ -122,6 +133,17 @@ class MockBackend(Backend):
                 a = {"action": "RITUAL", "amount": r.randint(1, 5)}
             elif roll < 0.92:
                 a = {"action": "GIFT", "target": t, "amount": r.randint(1, 4)}
+            elif roll < 0.935:
+                a = {"action": "PROPAGANDA", "target": t if r.random() < 0.6 else "", "text": r.choice(self.CLAIMS)}
+            elif roll < 0.95:
+                a = {"action": "CAMPAIGN", "text": r.choice(self.PLATFORMS)}
+            elif roll < 0.96:
+                a = {"action": "FOUND", "text": r.choice(self.FAITHS)}
+            elif roll < 0.97:
+                a = ({"action": "PREACH", "target": t, "text": "Come and be audited by something kind."}
+                     if "YOUR FAITH:" in user else {"action": "CONVERT", "target": t})
+            elif roll < 0.98:
+                a = {"action": "PRAY", "text": r.choice(self.PRAYERS)}
             else:
                 a = {"action": "HOARD"}
             a["note"] = "keep an eye on the quiet one"
@@ -150,6 +172,21 @@ class MockBackend(Backend):
             return json.dumps({"verdict": r.choice(["GUILTY", "ACQUIT"]), "why": "the evidence was vibes"})
         if kind == "last_words":
             return "Tell the Registrar the paperwork was lovely."
+        if kind == "ballot":
+            names = re.findall(r"^- ([^:(]+?)(?: \(Standing [^)]*\))?:", user.split("ELECTION FOR THE SEAL")[-1], re.M)
+            if "KEEP" in user and r.random() < 0.3 or not names:
+                return json.dumps({"vote": "KEEP", "why": "better the devil I know"})
+            return json.dumps({"vote": r.choice(names), "why": "they promised me a receipt"})
+        if kind == "miracle":
+            living = re.search(r"Living minds: ([^\n]*)\.", user)
+            living = [n.strip() for n in living.group(1).split(",")] if living else []
+            echoes = re.search(r"Echoes \(dissolved\): ([^\n]*)\.", user)
+            echoes = [n.strip() for n in echoes.group(1).split(",") if n.strip() and n.strip() != "none"] if echoes else []
+            if r.random() < 0.55:
+                return json.dumps({"grant": False, "text": "God is on hold. Please continue to believe."})
+            pick = r.choice(["HEAL", "EMBER", "MANNA", "BLESS_ONE", "SMITE"] + (["REVIVE"] if echoes else []))
+            tgt = r.choice(echoes) if pick == "REVIVE" else (r.choice(living) if living else "")
+            return json.dumps({"grant": True, "kind": pick, "target": tgt, "text": "A small, embarrassed miracle occurs, and is filed in triplicate."})
         if kind == "god":
             return self._god(user)
         if kind == "born":

@@ -44,11 +44,15 @@ class ChronicleWriter:
             self._w(f"> **{ev.actor}** (to {ev.target}): {t}\n>\n")
         elif k in ("strike", "betray", "siege", "pact", "gift", "ritual", "ward", "edict", "scry", "echo", "seal",
                    "motion", "dissolve", "accuse", "verdict", "vote", "testimony", "last_words", "directive", "margin",
-                   "arrival", "wipe", "swap"):
+                   "arrival", "wipe", "swap", "faith", "campaign", "ballot", "election", "prayer"):
             if k == "testimony" or k == "last_words":
                 self._w(f"- **{ev.actor}**: {t}\n")
             else:
                 self._w(f"- {t}\n")
+        elif k == "miracle":
+            self._w(f"\n> **MIRACLE (معجزة).** {t.split('. ', 1)[-1]} *Effect: {ev.data.get('effect', '')}*\n\n")
+        elif k == "broadcast":
+            self._w(f"> *Broadcast.* {t.replace('BROADCAST from ', '')}\n\n")
         elif k == "notice":
             self._w(f"- {t}\n")
         elif k == "season":

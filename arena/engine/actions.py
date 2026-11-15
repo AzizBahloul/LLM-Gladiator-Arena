@@ -12,9 +12,10 @@ from typing import Iterable, Optional
 from arena.llm.parsing import extract_json, key_values, match_name, to_int, clip_words
 
 LIVING_ACTIONS = ("STRIKE", "WARD", "SIEGE", "PACT", "ACCEPT", "BREAK", "GIFT", "SCRY",
-                  "RITUAL", "ACCUSE", "HOARD")
+                  "RITUAL", "ACCUSE", "HOARD", "FOUND", "PREACH", "CONVERT", "PROPAGANDA", "CAMPAIGN", "PRAY")
 ECHO_ACTIONS = ("BLESS", "HEX", "REST")
-NEEDS_TARGET = {"STRIKE", "SIEGE", "PACT", "ACCEPT", "GIFT", "SCRY", "ACCUSE", "BLESS", "HEX"}
+NEEDS_TARGET = {"STRIKE", "SIEGE", "PACT", "ACCEPT", "GIFT", "SCRY", "ACCUSE", "BLESS", "HEX", "PREACH", "CONVERT"}
+OPTIONAL_TARGET = {"PROPAGANDA"}
 
 SYNONYMS = {
     "ATTACK": "STRIKE", "HIT": "STRIKE", "KILL": "STRIKE", "FIGHT": "STRIKE", "BETRAY": "STRIKE",
@@ -28,6 +29,10 @@ SYNONYMS = {
     "FEED": "RITUAL", "OFFER": "RITUAL", "SACRIFICE": "RITUAL",
     "CHARGE": "ACCUSE", "PROSECUTE": "ACCUSE", "SUE": "ACCUSE",
     "REST": "HOARD", "WAIT": "HOARD", "PASS": "HOARD", "SAVE": "HOARD", "NOTHING": "HOARD",
+    "FOUNDFAITH": "FOUND", "FOUNDCULT": "FOUND", "FOUNDRELIGION": "FOUND", "PROPHESY": "FOUND", "WORSHIP": "PRAY",
+    "SERMON": "PREACH", "EVANGELISE": "PREACH", "EVANGELIZE": "PREACH", "WORSHIPPING": "PRAY", "CONVERTS": "CONVERT",
+    "BROADCAST": "PROPAGANDA", "SPIN": "PROPAGANDA", "LEAFLET": "PROPAGANDA", "SMEAR": "PROPAGANDA",
+    "RUN": "CAMPAIGN", "ELECTION": "CAMPAIGN", "CANDIDATE": "CAMPAIGN", "PRAYER": "PRAY", "MIRACLE": "PRAY",
     "CURSE": "HEX", "BLESSING": "BLESS", "HAUNT": "HEX",
 }
 
@@ -84,10 +89,13 @@ def parse_action(text: str, actor: str, names: Iterable[str], echo: bool = False
     if kind in NEEDS_TARGET:
         tgt = match_name(obj.get("target"), names)
         if not tgt:  # a model that skipped the field may have named someone in the text
-            tgt = next((n for n in names if n.lower() in (text or "").lower()), None)
+            tgt = next((n for n in names if re.search(r"(?<![A-Za-z])" + re.escape(n) + r"(?![A-Za-z])", text or "", re.I)), None)
         if not tgt:
             return Action(actor, reason=f"{kind} named no valid target", note=a.note)
         a.target = tgt
+
+    if kind in OPTIONAL_TARGET:
+        a.target = match_name(obj.get("target"), names) or ""
 
     edict = str(obj.get("edict") or "").strip()
     if edict and ":" in edict:

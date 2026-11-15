@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Optional, Set
 
-from arena.llm.ollama_tools import ModelLedger, OllamaAdmin
+from arena.llm.ollama_tools import ModelLedger, OllamaAdmin, canon
 
 
 @dataclass
@@ -32,29 +32,34 @@ class Permadeath:
         self.ledger = ledger
         self.enabled = enabled
         self.include_preexisting = include_preexisting
-        self.reserved: Set[str] = set(reserved)  # Registrar and God models: never wiped
+        self.reserved: Set[str] = {canon(m) for m in reserved}  # Registrar and God models: never wiped
 
     def status(self, model: str) -> str:
         """'at stake' or 'protected' (for the cast list)."""
         if not self.enabled:
             return "safe"
-        if model in self.reserved:
+        if canon(model) in self.reserved:
             return "protected"
-        if self.ledger.is_protected(model) and not self.include_preexisting:
-            return "protected"
-        return "at stake"
+        if self.ledger.is_protected(model):
+            return "at stake" if self.include_preexisting else "protected"
+        return "at stake" if self.ledger.is_owned(model) else "untracked"   # not ours, so never deleted
 
     def wipe(self, model: str, in_use: Iterable[str]) -> WipeResult:
         if not self.enabled:
             return WipeResult(False, model, "permadeath is off")
         if self.admin is None:
             return WipeResult(False, model, "no ollama admin (not an ollama run)")
-        if model in set(in_use):
+        if canon(model) in {canon(m) for m in in_use}:
             return WipeResult(False, model, "another mind still uses this model")
-        if model in self.reserved:
+        if canon(model) in self.reserved:
             return WipeResult(False, model, "reserved for the Registrar or God")
-        if self.ledger.is_protected(model) and not self.include_preexisting:
-            return WipeResult(False, model, "protected: it was installed before the arena first ran")
+        if self.ledger.corrupt:
+            return WipeResult(False, model, "the model ledger is unreadable, so nothing is deleted")
+        if self.ledger.is_protected(model):
+            if not self.include_preexisting:
+                return WipeResult(False, model, "protected: it was installed before the arena first ran")
+        elif not self.ledger.is_owned(model):
+            return WipeResult(False, model, "not installed by the arena, so it is not ours to delete")
         try:
             size = self.admin.installed().get(model, 0.0)
         except Exception:

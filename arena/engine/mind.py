@@ -38,11 +38,23 @@ GIFT target amount: give Lumens away.
 SCRY target: costs 2. Reveals their state, and sometimes a Margin Note, a truth about the Undermind.
 RITUAL amount: feed that many Lumens to the Ember.
 ACCUSE target: costs 1. The Registrar convenes a Tribunal and every mind votes on the charge.
-HOARD: do nothing and gain 2 Lumens."""
+HOARD: do nothing and gain 2 Lumens.
+
+SOCIETY (all optional, all yours to choose)
+FOUND text: costs 3. Found a faith or cult. Write "Its Name: its creed" in text. You become its prophet. At most 3 faiths exist.
+PREACH target text: costs 1. Whisper your faith's creed to a mind. You must belong to a faith.
+CONVERT target: free. Join the faith that mind follows. Members pay their prophet 1 Lumen tithe each cycle and their RITUALs count 1.5x. Striking a fellow believer is heresy (+2 Infamy).
+PROPAGANDA text (target optional): costs 2. Broadcast a public claim, true or false, that every mind will read. It raises your Standing; a named target loses Standing. The Registrar does not check facts.
+CAMPAIGN text: costs 2. Stand for the Seal, with your platform in text. If anyone campaigns, every living mind votes for a candidate or to KEEP the Warden. Standing adds half a vote per point.
+PRAY text: costs 1. Ask God for a miracle (معجزة) in your own words. Miracles are rare: God hears every prayer, answers few, and may punish. Prayers from believers of one faith carry together."""
+
+VOICE_RULES = """HOW TO SPEAK
+Speak only the words your character says aloud, in the first person. No stage directions, no asterisks, no narrating your own gestures, no quoting yourself.
+Be specific: name a mind, a number, a deal or a threat that moves the game. Do not repeat or paraphrase anything already said in the parley. Do not greet everyone. Stay in your own voice and never sound like the others."""
 
 ACTION_FORMAT = """Reply with ONLY one JSON object, for example:
 {"action":"STRIKE","target":"Name","amount":2,"text":"","note":"a private reminder to yourself, max 25 words","motion":"NONE","edict":""}
-"target" must be the exact name of ANOTHER living mind (never yourself, never empty) for every action that has a target. "text" is the charge for ACCUSE or the terms for PACT, otherwise empty. "motion" is used only in Act III (UNPLUG, MERGE or NONE). "edict" is used only if you hold the Seal: SPARE:name, SILENCE:name or TITHE:name."""
+"target" must be the exact name of ANOTHER living mind (never yourself, never empty) for every action that has a target. "text" is the charge for ACCUSE, the terms for PACT, the creed for FOUND, the sermon for PREACH, the claim for PROPAGANDA, the platform for CAMPAIGN, the prayer for PRAY, otherwise empty. "motion" is used only in Act III (UNPLUG, MERGE or NONE). "edict" is used only if you hold the Seal: SPARE:name, SILENCE:name or TITHE:name."""
 
 ECHO_RULES = """You are an Echo: a dissolved mind that can still reach the living. You cannot be hurt and you cannot win.
 Each haunting costs one charge. Choose one:
@@ -72,7 +84,8 @@ class Mind:
         p = self._state.persona(wick.persona_id)
         who = (f'You are {p.name}, "{p.epithet}". Before the Undermind you were {p.former_life}. '
                f"You want {p.desire}. You fear {p.fear}. Habit: you {p.quirk}.\n\n")
-        return who + RULES_TEXT + (("\n\n" + extra) if extra else "")
+        voice = f"HOW YOU SOUND: {p.voice or ('You ' + p.quirk + '.')}\n\n"
+        return who + voice + RULES_TEXT + "\n\n" + VOICE_RULES + (("\n\n" + extra) if extra else "")
 
     def _call(self, wick: Wick, kind: str, system: str, user: str, max_tokens: int) -> Completion:
         model = self.fallback_model if (wick.wiped and self.fallback_model) else wick.model
@@ -98,6 +111,7 @@ class Mind:
             b = sc.get("bounty")
             if b:
                 L.append(f'BOUNTY: whoever lands a Strike on {b["target"]} this cycle is paid {b["amount"]} Lumens.')
+        L += self._society_view(s, w)
         warden = s.warden or "nobody"
         L.append(f"SEAL (Warden): {warden}{' (you)' if s.warden == w.name else ''}")
         flags = [f for f, on in (("WARDED", w.ward), ("SILENCED", w.silenced)) if on]
@@ -150,10 +164,51 @@ class Mind:
             L += [f"- {t}" for t in parley[-14:]]
         return "\n".join(L)
 
+    def _society_view(self, s: GameState, w: Wick) -> List[str]:
+        L: List[str] = []
+        if s.faiths:
+            L.append("FAITHS: " + "; ".join(
+                f'{f["name"]} (prophet {f["founder"]}{", martyred" if f.get("martyred") else ""}; '
+                f'{", ".join(f["members"])}; creed: {f["creed"]})' for f in s.faiths.values()))
+        mine = s.faiths.get(w.faith) if w.faith else None
+        if mine:
+            L.append(f'YOUR FAITH: {mine["name"]}' + (" (you are its prophet and receive the tithe)" if mine["founder"] == w.name else
+                                                      f' (you tithe 1 Lumen a cycle to {mine["founder"]})'))
+        if w.sway:
+            L.append(f"YOUR STANDING: {w.sway:+d}")
+        casts = [b for b in s.broadcasts if b["cycle"] >= s.cycle - 1]
+        if casts:
+            L.append("BROADCASTS (public propaganda, unverified):")
+            L += [f'  {b["frm"]}' + (f' about {b["about"]}' if b.get("about") else "") + f': {b["text"]}' for b in casts[-4:]]
+        if s.miracles and s.miracles[-1]["cycle"] >= s.cycle - 3:
+            m = s.miracles[-1]
+            L.append(f'A MIRACLE happened recently ({m["kind"]}): {m["text"]}')
+        return L
+
+    # -- elections -----------------------------------------------------------------------
+    def ballot(self, s: GameState, voter: Wick, candidates: Dict[str, str],
+               incumbent: Optional[str]) -> Tuple[Optional[Tuple[str, str]], str]:
+        lines = "\n".join(f"- {n}" + (f" (Standing {s.wicks[n].sway:+d})" if s.wicks[n].sway else "") + f": {p}" for n, p in candidates.items())
+        keep = f' or "KEEP" to leave the Seal with {incumbent}' if incumbent else ""
+        user = (self.view(s, voter) + f"\n\nELECTION FOR THE SEAL. Candidates and their platforms:\n{lines}\n\n"
+                f'Vote for exactly one candidate{keep}. You may vote for yourself.\n'
+                'Reply with ONLY JSON: {"vote":"exact candidate name or KEEP","why":"max 15 words"}')
+        c = self._call(voter, "ballot", self._system(voter), user, self.rules.tokens_short)
+        if not c.ok:
+            return None, c.error
+        obj = extract_json(c.text) or key_values(c.text)
+        raw = str(obj.get("vote") or obj.get("choice") or c.text)
+        if incumbent and re.search(r"\bKEEP\b", raw.upper()):
+            return ("KEEP", clip_words(str(obj.get("why") or ""), 20)), ""
+        pick = match_name(raw, list(candidates))
+        if pick:
+            return (pick, clip_words(str(obj.get("why") or ""), 20)), ""
+        return None, "no valid candidate in the ballot"
+
     # -- parley ------------------------------------------------------------------------
     def parley(self, s: GameState, w: Wick, parley: List[str]) -> Tuple[Optional[Tuple[str, str]], str]:
         user = (self.view(s, w, parley) +
-                '\n\nIt is PARLEY. Speak, in your own voice, in at most 50 words. Address everyone or whisper to one mind.\n'
+                '\n\nIt is PARLEY. Speak, in your own voice, in at most 40 words, and say something nobody has said yet. Address everyone or whisper to one mind.\n'
                 'Reply with ONLY JSON: {"to":"ALL","say":"..."}  (use a mind\'s exact name in "to" to whisper).')
         c = self._call(w, "parley", self._system(w), user, self.rules.tokens_parley)
         if not c.ok:

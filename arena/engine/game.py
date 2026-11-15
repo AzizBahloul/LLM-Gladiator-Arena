@@ -24,6 +24,7 @@ from arena.engine.god import God, Scenario
 from arena.engine.mind import Mind
 from arena.engine.models import ModelHub
 from arena.engine.narrator import Narrator
+from arena.engine import society
 from arena.engine.rules import Rules
 from arena.engine.state import GameState, Wick, make_rng
 from arena.engine.store import RunStore
@@ -37,7 +38,8 @@ REGISTRAR = "The Registrar"
 GOD = "God"
 DIGEST_KINDS = {"act", "notice", "speech", "whisper", "testimony", "ward", "strike", "betray", "siege", "pact", "gift",
                 "scry", "ritual", "accuse", "verdict", "dissolve", "last_words", "echo", "seal", "edict",
-                "motion", "stall", "fizzle", "margin", "arrival", "wipe", "swap", "season"}
+                "motion", "stall", "fizzle", "margin", "arrival", "wipe", "swap", "season",
+                "faith", "broadcast", "campaign", "election", "prayer", "miracle"}
 GUEST_COLORS = ["#e6a1c4", "#9ec5f0", "#b8d98d", "#d3b3f5", "#8fd9d0", "#e8c19a", "#c4c4d6", "#f0b7a4"]
 
 
@@ -82,10 +84,20 @@ class Game:
         self.narrator = Narrator(backend, self.narrator_model, self.rules)
         self.god = God(backend, self.god_model, self.rules) if self.rules.god else None
         if hub:
-            hub.permadeath.reserved |= {self.narrator_model, self.god_model}
+            from arena.llm.ollama_tools import canon
+            hub.permadeath.reserved |= {canon(self.narrator_model), canon(self.god_model)}
             hub.permadeath.enabled = hub.permadeath.enabled and self.rules.permadeath
+            self._reconcile_wiped()
         if store is not None:
             self.bus.subscribe(store.record)
+
+    def _reconcile_wiped(self) -> None:
+        """A run closed between `ollama rm` and the next checkpoint must not wake with a living mind on a deleted model."""
+        from arena.llm.ollama_tools import canon
+        gone = {canon(m) for m in self.hub.ledger.data.get("wiped", [])}
+        for w in self.s.wicks.values():
+            if not w.wiped and canon(w.model) in gone and not self.hub.admin.has(w.model):
+                w.wiped = True
 
     # ================================================================== setup ==========
     def _narrator_model(self) -> str:
@@ -168,6 +180,7 @@ class Game:
                 "infamy": w.infamy, "ward": w.ward, "silenced": w.silenced, "partner": s.partner_of(w.name),
                 "warden": s.warden == w.name, "directive_done": w.directive_done, "persona_id": w.persona_id,
                 "wiped": w.wiped, "guest": w.guest,
+                "faith": s.faiths[w.faith]["name"] if w.faith in s.faiths else "", "sway": w.sway,
             })
         return {"cycle": s.season_cycle, "cycles": self.rules.cycles, "act": s.act, "act_title": ACTS[s.act].title,
                 "ember": s.ember, "warden": s.warden, "omen": s.omen_id, "wicks": wicks, "ending": s.ending,
@@ -247,6 +260,9 @@ class Game:
         with self._cmd_lock:
             cmds, self._commands = self._commands, []
         for c in cmds:
+            if c.get("model") and self.hub is not None and not self.hub.admin.has(c["model"]):
+                self.emit("system", f"{c['model']} is no longer installed, so that change was dropped.", pace=False)
+                continue
             if c["type"] == "swap" and c["name"] in self.s.wicks:
                 w = self.s.wicks[c["name"]]
                 old, w.model, w.wiped = w.model, c["model"], False
@@ -269,8 +285,12 @@ class Game:
                           pace=False)
                 return None
         name = persona["name"]
-        if name in s.wicks or name in (REGISTRAR, GOD):
-            self.emit("system", f"A newborn tried to be called {name}, which is taken. Nobody arrives.", pace=False)
+        low = name.lower()
+        letters = re.sub(r"[^a-z]", "", low)
+        clash = len(letters) < 3 or low in {"all", "none", "nobody", "everyone", "god", "registrar", "the registrar"} \
+            or any(low == o.lower() or low in o.lower() or o.lower() in low for o in list(s.wicks) + [REGISTRAR, GOD])
+        if clash:
+            self.emit("system", f"A newborn tried to be called {name}, which is taken or too easily confused with another name. Nobody arrives.", pace=False)
             return None
         pid = "guest:" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
         h = int(hashlib.sha1(name.encode()).hexdigest(), 16)
@@ -455,6 +475,7 @@ class Game:
                 gain += 1
             w.lumens = max(0, w.lumens + gain)
         self.emit("income", "Stipends paid. The Seal pays extra, as does a registered Pact.", pace=False)
+        society.tithes(self)
 
         # the Lamp burns
         decay = self.rules.decay_for(s.act) + float(m["decay"])
@@ -470,7 +491,9 @@ class Game:
         from arena.llm import catalog
         used = {w.model for w in self.s.wicks.values()}
         reserved = self.hub.permadeath.reserved if self.hub else set()
-        have = [m for m in (self.hub.installed() if self.hub else []) if not catalog.is_thinking_model(m)]
+        from arena.engine.models import _AVOID
+        have = [m for m in (self.hub.installed() if self.hub else [])
+                if not catalog.is_thinking_model(m) and not any(w in m.lower() for w in _AVOID)]
         pool = [m for m in self._models_pool() + have if m not in used and m not in reserved]
         return pool[0] if pool else self._choose_model()
 
@@ -635,7 +658,8 @@ class Game:
                 continue
             w.lumens -= n
             w.bump("ritual_lumens", n)
-            self._feed(n * self.rules.feed_per_lumen * float(m["ritual_mult"]))
+            devout = society.FAITH_RITUAL_MULT if w.faith else 1.0
+            self._feed(n * self.rules.feed_per_lumen * float(m["ritual_mult"]) * devout)
             self.emit("ritual", f"{w.name} feeds {n} Lumens to the Ember.", actor=w.name, amount=n)
             self.file(f"{w.name} fed {n} Lumens to the Ember.")
         for a in of("GIFT"):
@@ -692,6 +716,10 @@ class Game:
                 msg = f"The Echo of {e.name} hexes {t.name} (-{amt} Coherence)."
             self.emit("echo", msg, actor=e.name, target=t.name)
             self.file(msg)
+        self._process_deaths()
+
+        # 8b. society: faiths, propaganda, elections, prayers
+        society.resolve(self, of)
         self._process_deaths()
 
         # 9. motions (Act III)
@@ -960,6 +988,7 @@ class Game:
             self._feed(r.feed_per_dissolution + rest * 0.5)
             s.remove_pacts_of(w.name)
             s.offers = [o for o in s.offers if w.name not in (o["frm"], o["to"])]
+            society.on_dissolve(self, w)
             how = f" by {killer}" if killer else ""
             self.emit("dissolve", f"{w.name} is dissolved{how}. Form 27-B has been filed, retroactively. The Ember brightens.",
                       actor=w.name, target=killer or "")
@@ -986,6 +1015,8 @@ class Game:
             return
         in_use = {x.model for x in self.s.wicks.values() if x is not w and (x.alive or x.haunting) and not x.wiped}
         in_use |= {self.narrator_model, self.god_model}
+        with self._cmd_lock:          # a swap or newborn already queued still needs its model
+            in_use |= {c["model"] for c in self._commands if c.get("model")}
         self._wait()
         res = pd.wipe(w.model, in_use)
         if res.wiped:
@@ -1049,6 +1080,7 @@ class Game:
                 self.emit("directive", f"{w.name} has fulfilled a secret Directive: {d.title}.", actor=w.name, audience=True)
         for w in s.wicks.values():
             w.inbox = w.inbox[-8:]
+        society.decay_sway(self)
         s.ember = min(self.rules.ember_cap, s.ember)
         self.push_state()
         self._chronicle()
@@ -1150,17 +1182,22 @@ class Game:
         self.rng.shuffle(pool)
         for i, w in enumerate(s.wicks.values()):
             w.alive, w.coherence, w.lumens = True, self.rules.start_coherence, self.rules.start_lumens
-            w.echo_charges, w.ward, w.silenced, w.infamy = 0, False, False, 0
+            w.echo_charges, w.ward, w.silenced, w.infamy, w.sway = 0, False, False, 0, 0
             w.dissolved_cycle = w.dissolved_by = None
             w.stats, w.inbox, w.note, w.directive_done, w.notes_read = {}, [], "", False, 0
             w.cipher = ciphers.pick(self.rng, taken)
             taken.append(w.cipher)
             w.directive_id = pool[i % len(pool)]
+        society.prune(self)           # faiths outlive a season; their dead and deleted believers do not
+        s.broadcasts, s.election = [], {}
         self._refill()
         s.warden = self.rng.choice(list(s.wicks)) if s.wicks else None
         s.phase = ""
         self.push_state()
         self.checkpoint()
+        if len(s.wicks) < 2:
+            self.emit("system", "Nobody could be born, so the Undermind waits in the dark. Install a model and resume.", pace=False)
+            raise StopGame()
 
     def _refill(self) -> None:
         """Bring the roster back up to min_minds. Newborns invent themselves from freshly chosen models."""

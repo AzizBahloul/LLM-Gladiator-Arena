@@ -23,7 +23,7 @@ class ModelScreen(ModalScreen):
     BINDINGS = [Binding("escape", "close", "Close")]
 
     CSS = """
-    ModelScreen { align: center middle; background: $u-bg 70%; }
+    ModelScreen { align: center middle; background: $u-bg 92%; }
     #picker { width: 96%; max-width: 110; height: 90%; background: $u-surface; border: round $u-ember; padding: 1 2; }
     #picker-title { text-style: bold; margin-bottom: 1; }
     #picker-cols { height: 1fr; }
@@ -36,6 +36,7 @@ class ModelScreen(ModalScreen):
     #picker-actions { height: 3; margin-top: 1; }
     #picker-actions Button { margin-right: 2; }
     #picker-note { color: $u-muted; height: auto; margin-top: 1; }
+    ModelScreen OptionList { scrollbar-background: $u-surface; scrollbar-color: $u-line; scrollbar-color-hover: $u-faint; scrollbar-color-active: $u-ember; }
     ModelScreen OptionList > .option-list--option-highlighted { background: $u-raised; color: $u-text; text-style: bold; }
     ModelScreen OptionList:focus > .option-list--option-highlighted { background: $u-raised; color: $u-text; }
     ModelScreen OptionList > .option-list--option-hover { background: $u-raised; }
@@ -64,8 +65,8 @@ class ModelScreen(ModalScreen):
                     yield Input(placeholder="Filter models, for example llama or 3b", id="filter")
                     yield OptionList(id="models")
             with Horizontal(id="picker-actions"):
-                yield Button("Birth a new mind from this model", id="born", variant="primary")
-                yield Button("Move the selected mind into this model", id="swap")
+                yield Button("Birth new mind", id="born", variant="primary")
+                yield Button("Swap model", id="swap")
                 yield Button("Close", id="close")
             yield Static("", id="picker-note")
 
@@ -75,7 +76,7 @@ class ModelScreen(ModalScreen):
         if self.hub is None:
             self._note("Changing models needs a run on ollama. This run uses a test double or a hosted API.")
         else:
-            self._note("Pick a mind on the left and a model on the right. The change lands at the start of the next cycle.")
+            self._note("Birth new mind: a new mind is born from the model on the right. Swap model: the mind on the left moves into it. Both land at the start of the next cycle.")
         self.query_one("#models", OptionList).focus()
 
     def _note(self, message: str) -> None:
@@ -124,7 +125,7 @@ class ModelScreen(ModalScreen):
             t.append(f"   {gb:g} GB", style=C["muted"])
             t.append("   installed" if installed else "   will download", style=C["faint"])
             if desc:
-                t.append("\n" + (desc if len(desc) < 90 else desc[:87] + "..."), style=C["faint"])
+                t.append("\n  " + (desc if len(desc) < 88 else desc[:85].rstrip() + "..."), style=C["faint"])
             box.add_option(Option(t, id=tag))
             self._rows.append(tag)
         if box.option_count:

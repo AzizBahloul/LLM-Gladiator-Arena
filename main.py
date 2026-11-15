@@ -135,7 +135,7 @@ def install_missing(cfg: Dict[str, Any], hub) -> None:
             def prog(model: str, frac: float, status: str) -> None:
                 if frac - last[0] >= 0.05 or frac >= 1.0:
                     last[0] = frac
-                    console.print(f"  installing {model}: {frac * 100:3.0f}%  {status}", highlight=False)
+                    console.print(f"  installing {model}: {frac * 100:3.0f}%  {status}", highlight=False, markup=False)
 
             if hub.ensure(current, prog):
                 if current != m:
@@ -306,7 +306,11 @@ def cmd_models(a: argparse.Namespace) -> int:
     if a.what == "pull":
         if not a.query:
             sys.exit("Give a model tag, e.g. python main.py models pull gemma2:2b")
-        ok = admin.pull(a.query, lambda m, f, s: console.print(f"  {m}: {f * 100:3.0f}% {s}", highlight=False) if int(f * 20) != int((f - 0.001) * 20) else None)
+        if not admin.up():
+            sys.exit("Ollama is not running. Start it with `ollama serve`.")
+        if not ledger.initialised:      # record what is already here BEFORE adding anything of ours
+            ledger.snapshot_protected(admin.installed())
+        ok = admin.pull(a.query, lambda m, f, s: console.print(f"  {m}: {f * 100:3.0f}% {s}", highlight=False, markup=False) if int(f * 20) != int((f - 0.001) * 20) else None)
         if ok:
             ledger.mark_owned(a.query)
         return 0 if ok else 1

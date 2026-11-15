@@ -11,6 +11,7 @@ api:
   temperature: 0.9
   timeout: 180                 # seconds to wait for one reply
   keep_alive: 10m              # how long ollama keeps a model loaded
+  num_ctx: 4096                # context window per call; smaller loads faster and needs less memory
 
 # Which models play.
 #   auto            choose a different small chat model for each mind from the catalog of 270 model

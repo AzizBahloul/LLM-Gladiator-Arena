@@ -75,3 +75,13 @@ def test_observations_are_facts_computed_from_the_game():
     g = make_game(1)
     obs = observations(g.s, g.rules)
     assert isinstance(obs, list) and all(isinstance(o, str) for o in obs)
+
+
+def test_god_output_with_absurd_numbers_does_not_crash():
+    from arena.engine.god import God
+    from arena.engine.rules import Rules
+    from arena.llm.mock import MockBackend
+    g = God(MockBackend(1), "m", Rules.from_config({}))
+    sc = g.parse('{"title":"t","text":"x","bounty":{"target":"Alpha","amount":Infinity},'
+                 '"boons":[{"target":"Alpha","lumens":1e999}]}', ["Alpha", "Beta"], 3, False)
+    assert sc is not None

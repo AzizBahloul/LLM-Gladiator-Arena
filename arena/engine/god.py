@@ -87,6 +87,14 @@ def observations(s: GameState, rules: Rules) -> List[str]:
     stalls = [w for w in s.wicks.values() if w.stat("stalls") >= 2]
     if stalls:
         obs.append("Some minds keep failing to answer: " + ", ".join(w.name for w in stalls) + ".")
+    for f in s.faiths.values():
+        obs.append(f"{f['founder']} leads the faith '{f['name']}' ({len(f['members'])} believers; creed: {f['creed']}).")
+    for b in s.broadcasts[-2:]:
+        obs.append(f"{b['frm']} broadcast" + (f" about {b['about']}" if b.get("about") else "") + f": {b['text']}")
+    if s.election and s.election.get("cycle", -9) >= s.cycle - 2:
+        obs.append(f"{s.election['winner']} won the last election for the Seal.")
+    if s.miracles and s.miracles[-1]["cycle"] >= s.cycle - 3:
+        obs.append(f"A miracle happened recently: {s.miracles[-1]['text']}")
     for h in s.history[-2:]:
         obs.append(f"In season {h['season']} the ending was {h['ending_title']}" + (f", won by {', '.join(h['victors'])}" if h.get("victors") else "") + ".")
     return obs
@@ -98,8 +106,8 @@ class God:
         self.model = model
         self.rules = rules
 
-    def _ask(self, prompt: str, max_tokens: int) -> Optional[str]:
-        c = self.backend.complete(SYSTEM, prompt, kind="god", model=self.model, max_tokens=max_tokens, temperature=1.0)
+    def _ask(self, prompt: str, max_tokens: int, kind: str = "god") -> Optional[str]:
+        c = self.backend.complete(SYSTEM, prompt, kind=kind, model=self.model, max_tokens=max_tokens, temperature=1.0)
         return c.text if c.ok and c.text.strip() else None
 
     # ---------------------------------------------------------------- the cycle's twist ----
@@ -134,7 +142,7 @@ class God:
             tgt = match_name(b.get("target"), names)
             try:
                 amt = int(float(b.get("amount", 0)))
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 amt = 0
             if tgt and amt > 0:
                 sc.bounty = {"target": tgt, "amount": max(1, min(12, amt))}
@@ -149,7 +157,7 @@ class God:
                 try:
                     lu = max(-6, min(8, int(float(item.get("lumens", 0)))))
                     co = max(-12, min(12, int(float(item.get("coherence", 0)))))
-                except (TypeError, ValueError):
+                except (TypeError, ValueError, OverflowError):
                     continue
                 if lu or co:
                     sc.boons.append({"target": tgt, "lumens": lu, "coherence": co})
@@ -157,6 +165,39 @@ class God:
         if can_arrive and isinstance(arr, dict):
             sc.arrival = clean_persona(arr)
         return sc
+
+    # ----------------------------------------------------------------------- miracles ----
+    def miracle(self, s: GameState, prayers: List[Dict[str, str]]) -> Optional[Dict[str, Any]]:
+        """The minds prayed. God decides whether a miracle (معجزة) happens, and which. Declining is the default."""
+        from arena.engine.society import MIRACLE_KINDS
+        living = [w.name for w in s.living()]
+        echoes = [w.name for w in s.wicks.values() if not w.alive]
+        asked = "\n".join(f"- {p['who']}" + (f" (of {p['faith']})" if p["faith"] else "") + f": {p['words']}" for p in prayers)
+        menu = "\n".join(f"- {k}: {v}" for k, v in MIRACLE_KINDS.items())
+        story = "\n".join(f"- {c['text']}" for c in s.chronicle[-3:]) or "(nothing yet)"
+        prompt = (f"Season {s.season}, cycle {s.season_cycle}. Ember {s.ember:.0f}. Some minds have prayed to you:\n{asked}\n\n"
+                  f"RECENT STORY:\n{story}\n\nA miracle is rare and must mean something. Grant one only if the prayer is sincere, costly, "
+                  "clever or funny, or if the story has earned it. Refusing is normal. You may also answer a blasphemer with SMITE. "
+                  f"Miracles you can work:\n{menu}\n\nLiving minds: {', '.join(living)}. Echoes (dissolved): {', '.join(echoes) or 'none'}.\n"
+                  'Reply with ONLY JSON: {"grant":true|false,"kind":"one of the kinds above","target":"exact name if the kind needs one",'
+                  '"text":"one or two sentences, as the Registrar records it, dry and a little funny"}')
+        text = self._ask(prompt, 240, kind="miracle")
+        obj = extract_json(text) if text else None
+        if not obj:
+            return None
+        said = trim_sentences(str(obj.get("text") or ""), 45)
+        grant = obj.get("grant") is True or str(obj.get("grant")).lower() == "true"
+        kind = re.sub(r"[^A-Z_]", "", str(obj.get("kind") or "").upper())
+        if not grant or kind not in MIRACLE_KINDS:
+            return {"grant": False, "text": said}
+        target = ""
+        if kind in ("BLESS_ONE", "SMITE"):
+            target = match_name(obj.get("target"), living) or ""
+        elif kind == "REVIVE":
+            target = match_name(obj.get("target"), echoes) or ""
+        if kind in ("BLESS_ONE", "SMITE", "REVIVE") and not target:
+            return {"grant": False, "text": said or "God points vaguely at nobody. The miracle is cancelled."}
+        return {"grant": True, "kind": kind, "target": target, "text": said}
 
     # ------------------------------------------------------------------ season premise ----
     def season_premise(self, s: GameState, summary: str) -> Optional[Dict[str, Any]]:

@@ -167,6 +167,8 @@ class Roster(Static):
                 tags: List[str] = []
                 if w["partner"]:
                     tags.append(f"pact with {w['partner'].split()[0]}")
+                if w.get("faith"):
+                    tags.append(w["faith"])
                 if w["ward"]:
                     tags.append("warded")
                 if w["silenced"]:
@@ -181,7 +183,7 @@ class Roster(Static):
                 lines.append(Text(echo, style=C["faint"]))
                 gone = ("deleted from disk: " if w.get("wiped") else "") + w["model"]
                 lines.append(Text(gone, style=C["danger"] if w.get("wiped") else C["faint"], no_wrap=True, overflow="ellipsis"))
-            blocks.append(Group(*lines, Text("")))
+            blocks.append(Group(*lines))
         return Group(*blocks)
 
 
@@ -198,6 +200,8 @@ class StatusBar(Static):
     def render(self):
         width = (self.size.width or 100) - 4
         right = self.right if width >= 90 else ""
+        if right and len(self.left.plain) + len(right) + 2 > width:
+            right = ""                      # the live status outranks the key hints: drop the hints, not the news
         room = max(10, width - len(right) - 2)
         left = self.left.copy()
         if len(left.plain) > room:
@@ -260,7 +264,7 @@ class UndermindApp(App):
 
     #masthead { height: 3; padding: 0 2; background: $u-surface; border-bottom: solid $u-line; }
     #body { height: 1fr; padding: 0 1; }
-    #roster-wrap { width: 34; border: round $u-line; background: $u-surface; padding: 1 1 0 1; }
+    #roster-wrap { width: 34; border: round $u-line; background: $u-surface; padding: 0 1; }
     #roster-wrap:focus { border: round $u-ember; }
     #centre { width: 1fr; height: 100%; }
     #theatre { height: 45%; min-height: 16; max-height: 24; border: round $u-line; background: $u-bg; padding: 0; }
@@ -271,13 +275,15 @@ class UndermindApp(App):
     #parley:focus { border: round $u-ember; }
     #status { height: 1; padding: 0 2; background: $u-surface; color: $u-muted; }
 
-    #roster-wrap, #stage, #parley {
-        border-title-color: $u-muted; border-title-style: bold;
+    #roster-wrap, #stage, #parley, #theatre {
+        border-title-color: $u-text; border-title-style: bold;
         scrollbar-background: $u-surface; scrollbar-background-hover: $u-surface; scrollbar-background-active: $u-surface;
         scrollbar-color: $u-line; scrollbar-color-hover: $u-faint; scrollbar-color-active: $u-ember;
         scrollbar-size-vertical: 1;
     }
 
+    .medium #roster-wrap { width: 30; }
+    .medium #parley { width: 38; }
     .narrow #parley { display: none; }
     .narrow #roster-wrap { width: 30; }
     .tiny #roster-wrap { display: none; }
@@ -370,6 +376,7 @@ class UndermindApp(App):
     # --------------------------------------------------------------------- layout -----
     def _layout(self, width: int) -> None:
         narrow, tiny = width < 112, width < 76
+        self.screen.set_class(112 <= width < 140, "medium")
         self.screen.set_class(narrow, "narrow")
         self.screen.set_class(tiny, "tiny")
         self.screen.set_class(self._panel == "parley", "show-parley")

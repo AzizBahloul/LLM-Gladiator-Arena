@@ -101,7 +101,7 @@ def match_name(candidate: Any, names: Iterable[str]) -> Optional[str]:
         if n.lower() == cand:
             return n
     for n in names:
-        if cand and (n.lower().startswith(cand) or cand in n.lower() or n.lower() in cand):
+        if len(cand) >= 3 and (n.lower().startswith(cand) or cand in n.lower() or n.lower() in cand):
             return n
     for n in names:  # first word of a multi-word name
         if cand == n.lower().split()[0]:
@@ -136,9 +136,14 @@ def clean_speech(text: str, name: str = "", limit: int = 60) -> str:
     """Remove role labels, wrapping quotes and stage markup from a spoken line."""
     t = (text or "").strip()
     t = re.sub(r"^\s*(?:\*\*)?" + re.escape(name) + r"(?:\*\*)?\s*[:\-]\s*", "", t, flags=re.IGNORECASE) if name else t
-    t = t.strip().strip("\"'`").strip()
-    t = re.sub(r"\s+", " ", t)
-    return clip_words(t, limit)
+    t = re.sub(r"\*{1,2}(\w+)\*{1,2}", r"\1", t)   # *emphasis* on a single word is speech, keep it
+    t = re.sub(r"\*[^*]{0,200}\*", " ", t)       # *stage directions*
+    t = re.sub(r"\*[^*]*$", " ", t)               # an unfinished one at the end
+    t = t.replace("\u201c", '"').replace("\u201d", '"')
+    t = re.sub(r"\s+([.,!?])", r"\1", re.sub(r"\s+", " ", t)).strip().strip("\"'`").strip()
+    if t.count('"') % 2 == 1:
+        t = t.replace('"', "")                      # a quote opened and never closed
+    return trim_sentences(t, limit)
 
 
 def to_int(value: Any, default: int = 0, lo: int = 0, hi: int = 99) -> int:

@@ -72,9 +72,13 @@ class FakeAdmin:
         return True
 
 
-def make_hub(models: Dict[str, float], protected=(), enabled: bool = True, include_preexisting: bool = False):
+def make_hub(models: Dict[str, float], protected=(), enabled: bool = True, include_preexisting: bool = False,
+             owned=None):
+    """`owned` are the models the arena installed (default: every model that is not protected)."""
     admin = FakeAdmin(models)
     ledger = ModelLedger(tempfile.mktemp(suffix=".json"))
     ledger.snapshot_protected(protected)
+    for m in (owned if owned is not None else [m for m in models if m not in set(protected)]):
+        ledger.mark_owned(m)
     perm = Permadeath(admin, ledger, enabled=enabled, include_preexisting=include_preexisting)
     return ModelHub(admin, ledger, perm, Hardware(vram_gb=8, ram_gb=16, ram_free_gb=10)), admin, ledger

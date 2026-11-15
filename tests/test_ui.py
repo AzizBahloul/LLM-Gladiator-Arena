@@ -84,7 +84,10 @@ def test_resumed_run_shows_what_already_happened():
         async with app.run_test(size=(140, 44)) as pilot:
             await pilot.pause()
             await pilot.press("enter")
-            await pilot.pause(0.5)
+            for _ in range(60):                       # wait for the replay to land, however loaded the machine is
+                await pilot.pause(0.1)
+                if len(app.query_one("#stage").lines) > 20 and app.query_one("#parley").lines:
+                    break
             assert len(app.query_one("#stage").lines) > 20
             assert app.query_one("#parley").lines
         return app

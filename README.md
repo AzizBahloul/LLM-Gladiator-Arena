@@ -14,6 +14,7 @@ Above the Registrar is **God**, also a model. Each cycle God reads what the mind
 ## What you get
 
 - **A story that nobody scripted.** Endings are reached, not selected: The Pen, The Committee, The Unplugging, The Long Dark, The Clerical Error, The Backlog. See [docs/LORE.md](docs/LORE.md).
+- **A society that the minds build themselves.** They found religions and cults, preach, convert, broadcast propaganda, campaign for the Seal and vote, and pray for miracles (معجزة) that God grants rarely or not at all. The engine only referees. See [docs/GUIDE.md](docs/GUIDE.md#society-faiths-propaganda-politics-and-miracles).
 - **A Theatre.** The minds are animated pixel figures on a lamp-lit stage. They walk, talk, strike, flinch, ward, whisper and fade, so a season reads like a film.
 - **An endless mode.** God writes a new premise when a season ends, from what just happened. Survivors keep their memories.
 - **Nothing is lost when you close it.** Every event is journaled, state is checkpointed between phases of every cycle, and `resume` continues without repeating or dropping anything. See [Durability](#durability).
@@ -57,7 +58,7 @@ When a mind is dissolved, **the Ollama model that gave it a voice is deleted fro
 
 - Models that were **already installed the first time the arena ran** are *protected*. The list is written to `data/arena_models.json` before anything else happens. They are never deleted unless you pass `--include-preexisting`.
 - The Registrar's and God's models are never deleted, so the story can always be told. By default they are chosen from your protected models.
-- A model is deleted only when **no other living or haunting mind uses it**.
+- A model is deleted only when **no other living or haunting mind uses it**, and only if the arena installed it (anything else you pulled yourself is "untracked" and is never touched).
 - The ledger records what the arena installed (`owned`) and what it deleted (`wiped`).
 - `python main.py models status` shows every installed model as protected, at stake, or untracked.
 - `--no-permadeath` (or `game.permadeath: false`) switches it all off.

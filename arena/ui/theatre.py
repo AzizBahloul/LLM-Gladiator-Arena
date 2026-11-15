@@ -133,12 +133,13 @@ def hold_time(ev: Event) -> float:
         "act": 1.6, "notice": 0.5, "ending": 3.0, "chronicle": 0.8, "epilogue": 0.6, "margin": 0.5,
         "directive": 0.3, "stall": 0.6, "fizzle": 0.6, "ember": 0.3,
         "arrival": 2.0, "wipe": 2.2, "swap": 1.4, "season": 2.4,
+        "faith": 1.3, "broadcast": 1.5, "campaign": 1.1, "ballot": 0.4, "election": 1.8, "prayer": 1.2, "miracle": 3.2,
     }.get(k, 0.0)
 
 
-DROPPABLE_FIRST = ("vote", "stall", "fizzle", "margin", "directive", "ember", "seal", "scry", "gift", "edict")
-DROPPABLE_THEN = ("speech", "whisper", "siege_say", "testimony", "pact", "ward", "echo", "motion")
-NEVER_DROP = ("dissolve", "ending", "act", "arrival", "wipe", "season")
+DROPPABLE_FIRST = ("vote", "ballot", "stall", "fizzle", "margin", "directive", "ember", "seal", "scry", "gift", "edict", "prayer")
+DROPPABLE_THEN = ("speech", "whisper", "siege_say", "testimony", "pact", "ward", "echo", "motion", "faith", "broadcast", "campaign")
+NEVER_DROP = ("dissolve", "ending", "act", "arrival", "wipe", "season", "miracle", "election")
 UNQUEUED = ("think", "state", "cycle", "income", "system", "title")
 MAX_PENDING = 10
 
@@ -392,7 +393,7 @@ def compute_layout(cols: int, rows: int, names: List[str]) -> Layout:
     cx = cols // 2
     n = len(names)
     left_n, right_n = (n + 1) // 2, n // 2
-    gap = 7
+    gap = 7 if n <= 6 else 3
     pad = 3
     home: Dict[str, int] = {}
 
@@ -408,11 +409,11 @@ def compute_layout(cols: int, rows: int, names: List[str]) -> Layout:
     room: Dict[str, int] = {}
     # when minds stand closer than a sprite is wide, every other one steps back a row
     ordered = sorted(home, key=lambda n: home[n])
-    tight = len(xs) > 1 and min(b_ - a_ for a_, b_ in zip(xs, xs[1:])) < 10 and rows >= 14
+    tight = len(xs) > 1 and min(b_ - a_ for a_, b_ in zip(xs, xs[1:])) < 7 and rows >= 14
     back = {nm for j, nm in enumerate(ordered) if tight and j % 2 == 1}
     for nm, x in home.items():
         u = abs(x - cx) / max(1, cx)
-        arc[nm] = int(round(2 * u * u)) + (4 if nm in back else 0)
+        arc[nm] = int(round(2 * u * u)) + (3 if nm in back else 0)
         neigh = [abs(x - o) for o in xs if o != x]
         room[nm] = max(3, min(neigh) - 1) if neigh else 14
     lamp_y = max(6, min(16, int(P * 0.28)))
@@ -585,6 +586,9 @@ class Poser:
                 self._target(f, fs, b, p, home, sgn)
             if b.kind == "motion" and 0 <= p <= 1.2:
                 fs.armL = fs.armR = 150
+            if b.kind == "miracle" and 0.05 <= p <= 1.0:
+                fs.armL = fs.armR = 170 + 6 * math.sin(t * 4 + idx)      # everyone looks up
+                fs.y = -1 * smooth(math.sin(math.pi * clamp01(p)))
         if self.trial and f.name in self.trial["votes"]:
             self.fx.add("vote", f.name, self.trial["votes"][f.name])
         if f.ward and not fs.shield:
@@ -699,6 +703,18 @@ class Poser:
         elif k == "directive":
             self.fx.add("glint", f.name, p)
         elif k == "seal":
+            self.fx.add("glint", f.name, p)
+        elif k == "prayer":
+            fs.armL = fs.armR = 165 + 8 * math.sin(t * 5)
+            fs.lean = 0
+        elif k in ("broadcast", "campaign"):
+            fs.armR = 100 + 20 * math.sin(t * 7)
+            fs.mouth = p < 0.9 and math.sin(t * 15) > 0
+        elif k == "faith":
+            fs.armR = 150
+            if "founds" in b.text:
+                fs.armL = 150
+            fs.mouth = p < 0.9 and math.sin(t * 11) > 0
             self.fx.add("glint", f.name, p)
         elif k == "chronicle":
             pass
@@ -948,9 +964,24 @@ def build_sprite(f: Figure, fs: FS, t: float, mimic: Optional[Tuple[RGB, float]]
 
 
 # =============================================================================== drawing ====
+FIG_SCALE = 0.6          # figures are drawn small: sprites are authored 9x16 and shrunk about their feet
+
+
+def tx(x: float, y: float) -> Tuple[int, int]:
+    """Sprite coordinates to drawn coordinates. The feet (4, 15) stay where they are, the rest closes in on them."""
+    return 4 + int(round((x - 4) * FIG_SCALE)), 15 - int(round((15 - y) * FIG_SCALE))
+
+
+def shrink(px: Dict[Tuple[int, int], Tuple[RGB, float]]) -> Dict[Tuple[int, int], Tuple[RGB, float]]:
+    out: Dict[Tuple[int, int], Tuple[RGB, float]] = {}
+    for (x, y), v in px.items():      # later pixels (eyes, mouth, accessories) win, so faces survive
+        out[tx(x, y)] = v
+    return out
+
+
 def draw_sprite(cv: Canvas, spr: Sprite, ox: int, oy: int, alpha: float = 1.0, tint: Optional[RGB] = None,
                 tint_a: float = 0.0, ghost: bool = False) -> None:
-    for (x, y), (c, a) in spr.px.items():
+    for (x, y), (c, a) in shrink(spr.px).items():
         if tint is not None and tint_a > 0:
             c = mix(c, tint, tint_a)
         if ghost:
@@ -959,10 +990,10 @@ def draw_sprite(cv: Canvas, spr: Sprite, ox: int, oy: int, alpha: float = 1.0, t
 
 
 def draw_scatter(cv: Canvas, spr: Sprite, ox: int, oy: int, tau: float, seed: int) -> None:
-    for (x, y), (c, a) in spr.px.items():
+    for (x, y), (c, a) in shrink(spr.px).items():
         u1, u2 = hash01(x, y, seed), hash01(y, x, seed + 9)
-        dx = (u1 - 0.5) * 16 * tau
-        dy = -(2 + u2 * 13) * tau
+        dx = (u1 - 0.5) * 10 * tau
+        dy = -(1 + u2 * 8) * tau
         cv.put(int(round(ox + x + dx)), int(round(oy + y + dy)), mix(c, GHOST_TINT, tau * 0.6), a * (1 - tau) ** 0.8)
 
 
@@ -1117,7 +1148,7 @@ def render_frame(scene_or_widget: Any, t: float, cols: int, rows: int) -> Text:
     # lamp flare from recent ritual / dissolve beats
     flare = 0.0
     for b in scene.beats:
-        if b.kind in ("ritual", "dissolve") and b.start <= t <= b.end:
+        if b.kind in ("ritual", "dissolve", "miracle") and b.start <= t <= b.end:
             q = (t - b.start) / b.dur
             flare = max(flare, math.sin(math.pi * clamp01(q)) * (0.7 if b.kind == "ritual" else 1.0))
     draw_door(cv, lay, scene, t)
@@ -1147,7 +1178,7 @@ def render_frame(scene_or_widget: Any, t: float, cols: int, rows: int) -> Text:
     drawn_pairs = set()
     centers: Dict[str, Tuple[int, int]] = {}
     for f, fs, i in states:
-        centers[f.name] = (int(round(fs.x)), lay.feet_y - lay.arc.get(f.name, 0) + int(fs.y) - 15)
+        centers[f.name] = (int(round(fs.x)), lay.feet_y - lay.arc.get(f.name, 0) + int(fs.y) - 15 + int(round(8 - 8 * FIG_SCALE)))
     for f, fs, i in states:
         if f.partner and f.partner in centers and poser.visually_alive(f) and poser.visually_alive(scene.figures[f.partner]):
             pair = tuple(sorted((f.name, f.partner)))
@@ -1180,13 +1211,15 @@ def render_frame(scene_or_widget: Any, t: float, cols: int, rows: int) -> Text:
         if arrive <= 0:
             continue
         spr = build_sprite(f, fs, t, mimic)
-        anchors[f.name] = (ox + 4, oy + spr.top)
+        anchors[f.name] = (ox + 4, oy + tx(0, spr.top)[1])
         if poser.visually_alive(f):
             tint, ta = (DANGER, 0.65 * fs.flash) if fs.flash > 0 else (None, 0.0)
             if scene.ending and scene.ending[0] == "pen" and f.name in scene.ending[2]:
                 pass
             draw_sprite(cv, spr, ox, oy, arrive, tint, ta)
-            for gx, gy, gr, gc, ga in spr.glows:
+            for gx0, gy0, gr0, gc, ga in spr.glows:
+                gx, gy = tx(gx0, gy0)
+                gr = max(2, int(round(gr0 * FIG_SCALE)))
                 for yy in range(gy - gr, gy + gr + 1):
                     for xx in range(gx - gr, gx + gr + 1):
                         d = math.hypot(xx - gx, yy - gy)
@@ -1203,7 +1236,7 @@ def render_frame(scene_or_widget: Any, t: float, cols: int, rows: int) -> Text:
             elif f.faded_at is not None:
                 ghost_a = 0.38 * (1 - clamp01((t - f.faded_at) / 3.0))
             if ghost_a > 0.01:
-                bobg = int(round(2 * math.sin(t * 1.6 + i)))
+                bobg = int(round(1.4 * math.sin(t * 1.6 + i)))
                 # an Echo has no legs: a wavy tail instead
                 gspr = Sprite({k: v for k, v in spr.px.items() if k[1] <= 10}, [], spr.top)
                 for r_ in range(11, 15):
@@ -1211,11 +1244,13 @@ def render_frame(scene_or_widget: Any, t: float, cols: int, rows: int) -> Text:
                     for x_ in range(3 + (r_ - 10) // 3, 6 - (r_ - 10) // 3):
                         gspr.px[(x_ + wob, r_)] = (mix(hx(f.color), BG, 0.5), 0.8)
                 draw_sprite(cv, gspr, ox, oy + bobg, ghost_a, ghost=True)
-                cv.put(ox + 3, oy + bobg + spr.top + 2, TEXT, ghost_a + 0.2)
-                cv.put(ox + 5, oy + bobg + spr.top + 2, TEXT, ghost_a + 0.2)
+                ex0, ey0 = tx(3, spr.top + 2)
+                ex1, _ = tx(5, spr.top + 2)
+                cv.put(ox + ex0, oy + bobg + ey0, TEXT, ghost_a + 0.2)
+                cv.put(ox + max(ex1, ex0 + 1), oy + bobg + ey0, TEXT, ghost_a + 0.2)
         if fs.shield > 0:
-            cx_, cy_ = ox + 4, oy + 8
-            ring = 7
+            cx_, cy_ = ox + 4, oy + tx(4, 8)[1]
+            ring = 5
             for ang in range(-80, 81, 6):
                 a_ = math.radians(ang)
                 side = 1 if fs.x < lay.cx else -1
@@ -1256,8 +1291,8 @@ def render_frame(scene_or_widget: Any, t: float, cols: int, rows: int) -> Text:
             cv.dim(1 - 0.72 * q)
         if eid == "pen" and winners and winners[0] in centers:
             wx = centers[winners[0]][0]
-            cv.rect(wx - 7, lay.feet_y - 6, wx + 7, lay.feet_y - 1, mix(METAL, BLACK, 0.2))
-            cv.rect(wx - 7, lay.feet_y - 7, wx + 7, lay.feet_y - 7, mix(METAL, TEXT, 0.15))
+            cv.rect(wx - 5, lay.feet_y - 4, wx + 5, lay.feet_y - 1, mix(METAL, BLACK, 0.2))
+            cv.rect(wx - 5, lay.feet_y - 5, wx + 5, lay.feet_y - 5, mix(METAL, TEXT, 0.15))
 
     # to text
     layer: Dict[Tuple[int, int], Cell] = {}
@@ -1378,15 +1413,37 @@ def _draw_fx(cv: Canvas, kind: str, args: Tuple[Any, ...], centers, anchors, lay
                 cv.put(x - 1, y, col)
 
 
+def unique_prefix_len(names: List[str]) -> int:
+    """Shortest first-word prefix length at which no two minds share a label ("Mag" and "Mar", not "Ma" twice)."""
+    firsts = [n.split()[0] for n in names if n.split()]
+    for k in range(1, 12):
+        if len({f[:k] for f in firsts}) == len(set(firsts)):
+            return k
+    return 12
+
+
+def short_label(name: str, room: int, uniq: int) -> str:
+    if len(name) <= room:
+        return name
+    first = name.split()[0]
+    if len(first) <= room:
+        return first
+    keep = max(1, min(room - 1, max(uniq, 3)))
+    return first[:keep] + "…"
+
+
 def _overlays(layer: Dict[Tuple[int, int], Cell], scene: Scene, poser: Poser, lay: Layout, anchors, centers,
               t: float, cols: int, rows: int) -> None:
     # names and Coherence under each figure's home slot
+    uniq = unique_prefix_len(list(scene.figures))
+    banner_on = any((b.kind == "notice" and b.data.get("omen") and b.start <= t <= b.end + 1.6)
+                    or (b.kind in ("miracle", "election") and b.start <= t <= b.end + 0.8) for b in scene.beats)
     for nm, f in scene.figures.items():
         hxp = lay.home.get(nm)
         if hxp is None:
             continue
         room = lay.room.get(nm, 10)
-        label = nm if len(nm) <= room else (nm.split()[0] if len(nm.split()[0]) <= room else nm[: max(1, room - 1)] + "…")
+        label = short_label(nm, room, uniq)
         if len(label) > room:
             label = label[:room]
         col = hx(f.color)
@@ -1403,7 +1460,7 @@ def _overlays(layer: Dict[Tuple[int, int], Cell], scene: Scene, poser: Poser, la
             tag = label if f.echo > 0 else ""
             put_text(layer, cols, rows, start, rows - 2, tag, mix(FAINT, floor, 0.0), floor, italic=True)
             if f.echo > 0:
-                s = f"echo x{f.echo}"[:room]
+                s = f"echo x{f.echo}" if room >= 7 else f"x{f.echo}"
                 put_text(layer, cols, rows, max(0, hxp - len(s) // 2), rows - 1, s, FAINT, floor)
 
     # bubbles
@@ -1424,12 +1481,13 @@ def _overlays(layer: Dict[Tuple[int, int], Cell], scene: Scene, poser: Poser, la
         left = max(0, min(cols - w, ax - w // 2))
         n = len(lines)
         head_row = max(0, ay // 2)
-        avail = max(1, head_row - 1)
+        floor_row = 2 if banner_on else 0            # rows 0-1 belong to the Notice banner while it shows
+        avail = max(1, head_row - 1 - floor_row)
         if n > avail:
             lines = lines[:avail]
             lines[-1] = lines[-1][: max(0, wmax - 1)] + "…" if not lines[-1].endswith("…") else lines[-1]
             n = len(lines)
-        top_row = max(0, head_row - n - 1)
+        top_row = max(floor_row, head_row - n - 1)
         if style == "whisper":
             bg, fg = SURFACE, MUTED
         elif style == "ghost":
@@ -1477,7 +1535,15 @@ def _overlays(layer: Dict[Tuple[int, int], Cell], scene: Scene, poser: Poser, la
         if b.kind == "notice" and b.data.get("omen") and b.start <= t <= b.end + 1.6:
             head = b.text.split(". ")[0]
             q = clamp01(1 - (t - b.start - b.dur) / 1.6)
+            put_text(layer, cols, rows, 0, 1, " " * cols, TEXT, RAISED)
             put_text(layer, cols, rows, max(0, (cols - len(head)) // 2), 1, head[:cols], mix(RAISED, TEXT, min(1.0, q + 0.3)), RAISED)
+        if b.kind == "miracle" and b.start <= t <= b.end + 0.8:
+            q = clamp01(1 - max(0.0, t - b.end) / 0.8)
+            label = " MIRACLE "
+            put_text(layer, cols, rows, max(0, (cols - len(label)) // 2), 1, label, mix(RAISED, EMBER, q), RAISED, bold=True)
+        if b.kind == "election" and b.start <= t <= b.end:
+            label = " ELECTION "
+            put_text(layer, cols, rows, max(0, (cols - len(label)) // 2), 1, label, TEXT, RAISED, bold=True)
         if b.kind == "verdict" and b.start <= t <= b.end:
             q = (t - b.start) / b.dur
             if 0.15 < q < 0.7:

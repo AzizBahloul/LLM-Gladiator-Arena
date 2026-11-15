@@ -77,7 +77,7 @@ def bar(value: float, maximum: float, width: int, color: str, track: str = None)
 
 
 def coherence_color(v: int) -> str:
-    return C["ok"] if v > 60 else (C["ember"] if v > 30 else C["danger"])
+    return C["ok"] if v > 60 else (C["muted"] if v > 30 else C["danger"])   # amber stays reserved for the Ember
 
 
 def ember_color(v: float) -> str:
@@ -157,6 +157,29 @@ def stage_entry(ev: Event) -> Optional[RenderableType]:
         return Group(Text(""), Padding(rich(txt, f"bold {C['danger']}"), (0, 0, 0, 2)))
     if k == "last_words":
         return Padding(Group(speaker(ev.actor, "  last words"), Padding(Text(f"“{txt}”", style=f"italic {C['text']}"), (0, 0, 0, 2))), (0, 0, 0, 2))
+    if k == "miracle":
+        body = txt.split(". ", 1)[1] if ". " in txt else txt
+        head = Text("MIRACLE  (معجزة)", style=f"bold {C['ember']}")
+        return Group(Text(""), head, Padding(Text(body, style=f"italic {C['text']}"), (0, 0, 0, 2)),
+                     Padding(Text("Effect: " + ev.data.get("effect", ""), style=C["faint"]), (0, 0, 0, 2)), Text(""))
+    if k == "prayer":
+        return Padding(rich(txt, C["muted"] if ev.actor != "God" else C["text"]), (0, 0, 0, 2))
+    if k == "faith":
+        head = Text("Faith  ", style=f"bold {C['ember']}" if ev.data.get("founded") else C["faint"])
+        head.append(txt, style=C["text"] if ev.data.get("founded") else C["muted"])
+        if "HERESY" in txt:
+            head = Text(txt, style=f"bold {C['danger']}")
+        return Padding(head, (0, 0, 0, 2))
+    if k == "broadcast":
+        who, _, claim = txt.partition(": ")
+        return Padding(Group(Text(who.replace("BROADCAST", "Broadcast"), style=f"bold {C['muted']}"),
+                             Padding(Text(claim, style=f"italic {C['text']}"), (0, 0, 0, 2))), (0, 0, 0, 2))
+    if k == "campaign":
+        return Padding(rich(txt, C["text"]), (0, 0, 0, 2))
+    if k == "ballot":
+        return Padding(rich(txt, C["faint"]), (0, 0, 0, 4))
+    if k == "election":
+        return Group(Text(""), Padding(rich(txt.replace("ELECTION. ", "Election. "), f"bold {C['text']}"), (0, 0, 0, 2)))
     if k in ("pact", "gift", "ritual", "ward", "edict", "scry", "echo", "seal", "motion"):
         style = f"bold {C['text']}" if k in ("motion", "seal") else C["muted"]
         return Padding(rich(txt, style), (0, 0, 0, 2))

@@ -38,8 +38,11 @@ class OllamaAdmin:
         return {m["name"]: round(m.get("size", 0) / 1e9, 2) for m in r.json().get("models", [])}
 
     def has(self, model: str) -> bool:
-        have = self.installed()
-        return model in have or (":" not in model and f"{model}:latest" in have)
+        try:
+            have = {canon(m) for m in self.installed()}
+        except Exception:
+            return False          # an Ollama outage reads as "not installed", never as a crash
+        return canon(model) in have
 
     def pull(self, model: str, on_progress: Optional[Progress] = None, timeout: int = 7200) -> bool:
         try:
@@ -78,7 +81,16 @@ class OllamaAdmin:
 
 
 def free_disk_gb(path: str = ".") -> float:
-    return shutil.disk_usage(os.path.expanduser("~")).free / 1e9
+    return shutil.disk_usage(os.path.expanduser(path) if path not in ("", ".") else os.path.expanduser("~")).free / 1e9
+
+
+def canon(model: str) -> str:
+    """One spelling per model: no registry prefix, always a tag. 'llama3.2' and 'llama3.2:latest' are the same model."""
+    m = (model or "").strip().lower()
+    for pre in ("registry.ollama.ai/library/", "registry.ollama.ai/", "library/"):
+        if m.startswith(pre):
+            m = m[len(pre):]
+    return m if (":" in m or not m) else m + ":latest"
 
 
 # ------------------------------------------------------------------------------- ledger --
@@ -89,17 +101,26 @@ class ModelLedger:
         self.path = Path(path)
         self._lock = threading.Lock()
         self.data: Dict = {"protected": [], "owned": {}, "wiped": []}
+        self.corrupt = False
         if self.path.exists():
             try:
                 self.data.update(json.loads(self.path.read_text(encoding="utf-8")))
             except Exception:
-                pass
+                # An unreadable ledger means we no longer know what is safe: keep the evidence, delete nothing.
+                self.corrupt = True
+                try:
+                    shutil.copy2(self.path, self.path.with_suffix(".corrupt"))
+                except OSError:
+                    pass
 
     @property
     def initialised(self) -> bool:
-        return self.path.exists()
+        """True once the first-run snapshot of pre-existing models has really been taken."""
+        return self.corrupt or bool(self.data.get("snapshot_taken")) or bool(self.data.get("protected"))
 
     def _save(self) -> None:
+        if self.corrupt:
+            return                # never overwrite a ledger we could not read
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=str(self.path.parent), suffix=".tmp")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -112,24 +133,31 @@ class ModelLedger:
         """First run only: everything already on the machine is protected."""
         with self._lock:
             if not self.initialised:
-                self.data["protected"] = sorted(set(installed))
+                mine = {canon(m) for m in self.data["owned"]} | {canon(m) for m in self.data["wiped"]}
+                self.data["protected"] = sorted({canon(m) for m in installed} - mine)
+                self.data["snapshot_taken"] = True
                 self._save()
 
     def mark_owned(self, model: str) -> None:
         with self._lock:
-            if model not in self.data["protected"]:
-                self.data["owned"].setdefault(model, {"installed_at": time.time()})
+            if canon(model) not in {canon(m) for m in self.data["protected"]}:
+                self.data["owned"].setdefault(canon(model), {"installed_at": time.time()})
                 self._save()
 
     def mark_wiped(self, model: str) -> None:
         with self._lock:
-            self.data["owned"].pop(model, None)
-            if model not in self.data["wiped"]:
-                self.data["wiped"].append(model)
+            for k in [k for k in self.data["owned"] if canon(k) == canon(model)]:
+                self.data["owned"].pop(k, None)
+            if canon(model) not in {canon(m) for m in self.data["wiped"]}:
+                self.data["wiped"].append(canon(model))
             self._save()
 
     def is_protected(self, model: str) -> bool:
-        return model in self.data["protected"] or (":" not in model and f"{model}:latest" in self.data["protected"])
+        if self.corrupt:
+            return True
+        return canon(model) in {canon(m) for m in self.data["protected"]}
 
     def is_owned(self, model: str) -> bool:
-        return model in self.data["owned"]
+        if self.corrupt:
+            return False
+        return canon(model) in {canon(m) for m in self.data["owned"]}
