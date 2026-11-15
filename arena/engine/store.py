@@ -32,7 +32,7 @@ SKIP = {"state", "think"}  # live UI signals, not story
 def _atomic_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
+    with os.fdopen(fd, "w", encoding="utf-8", errors="replace") as f:
         f.write(text)
         f.flush()
         os.fsync(f.fileno())
@@ -88,7 +88,7 @@ class RunStore:
     # ------------------------------------------------------------------------- journal ------
     def _open(self):
         if self._fh is None:
-            self._fh = open(self.journal_path, "a", encoding="utf-8")
+            self._fh = open(self.journal_path, "a", encoding="utf-8", errors="replace")
         return self._fh
 
     def record(self, ev: Event) -> None:
@@ -180,7 +180,7 @@ class RunStore:
                     pass
         if summary["season"] in done:
             return False
-        with open(self.seasons_path, "a", encoding="utf-8") as f:
+        with open(self.seasons_path, "a", encoding="utf-8", errors="replace") as f:
             f.write(json.dumps(summary, ensure_ascii=False) + "\n")
             f.flush()
             os.fsync(f.fileno())

@@ -29,12 +29,19 @@ class Event:
     data: Dict[str, Any] = field(default_factory=dict)
     ts: float = field(default_factory=time.time)
 
+    def __post_init__(self) -> None:
+        # the last net: whatever a model wrote, no event carries terminal escapes or lone surrogates
+        from arena.llm.parsing import scrub, scrub_obj
+        self.text, self.actor, self.target = scrub(self.text), scrub(self.actor), scrub(self.target)
+        self.data = scrub_obj(self.data)
+
 
 class EventBus:
     def __init__(self) -> None:
         self._subs: List[Callable[[Event], None]] = []
         self._lock = threading.Lock()
         self.history: List[Event] = []
+        self._warned = False
 
     def subscribe(self, fn: Callable[[Event], None]) -> None:
         self._subs.append(fn)
@@ -45,5 +52,8 @@ class EventBus:
         for fn in list(self._subs):
             try:
                 fn(event)
-            except Exception:  # a broken view must never stop the game
-                pass
+            except Exception:  # a broken view must never stop the game, but it must not fail silently either
+                if not self._warned:
+                    self._warned = True
+                    import logging, traceback
+                    logging.getLogger("arena").warning("an event subscriber failed (shown once):\n%s", traceback.format_exc())

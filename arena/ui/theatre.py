@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from rich.style import Style
+from rich.cells import cell_len
 from rich.text import Text
 from textual.widget import Widget
 
@@ -1111,6 +1112,7 @@ class Cell:
 
 def put_text(layer: Dict[Tuple[int, int], Cell], cols: int, rows: int, col: int, row: int, s: str,
              fg: RGB, bg: Optional[RGB] = None, bold: bool = False, italic: bool = False) -> None:
+    s = "".join(ch if cell_len(ch) == 1 else "?" for ch in s)       # wide, zero-width and control characters would shift the row
     for i, ch in enumerate(s):
         c = col + i
         if 0 <= c < cols and 0 <= row < rows:
@@ -1425,7 +1427,7 @@ def unique_prefix_len(names: List[str]) -> int:
 def short_label(name: str, room: int, uniq: int) -> str:
     if len(name) <= room:
         return name
-    first = name.split()[0]
+    first = (name.split() or [name])[0]
     if len(first) <= room:
         return first
     keep = max(1, min(room - 1, max(uniq, 3)))
@@ -1525,6 +1527,8 @@ def _overlays(layer: Dict[Tuple[int, int], Cell], scene: Scene, poser: Poser, la
                 put_text(layer, cols, rows, ax + 3, max(0, row), f"-{dmg}", DANGER, None, bold=True)
 
     # act title card and Notice banner
+    live_notice = [b for b in scene.beats if b.kind == "notice" and b.data.get("omen") and b.start <= t <= b.end + 1.6]
+    newest_notice = live_notice[-1] if live_notice else None          # banners never stack, even at the fastest pace
     for b in scene.beats:
         if b.kind == "act" and b.start <= t <= b.end + 0.3:
             q = (t - b.start) / max(0.1, b.dur)
@@ -1532,7 +1536,7 @@ def _overlays(layer: Dict[Tuple[int, int], Cell], scene: Scene, poser: Poser, la
             title = f"ACT {['I', 'II', 'III'][min(2, max(0, b.data.get('_act', 1) - 1))]}  {b.data.get('act_title', '')}".strip()
             bgc = mix(BG, SURFACE, 0.9)
             put_text(layer, cols, rows, max(0, (cols - len(title)) // 2), 0, title, mix(bgc, EMBER, fade), bgc, bold=True)
-        if b.kind == "notice" and b.data.get("omen") and b.start <= t <= b.end + 1.6:
+        if b is newest_notice:
             head = b.text.split(". ")[0]
             q = clamp01(1 - (t - b.start - b.dur) / 1.6)
             put_text(layer, cols, rows, 0, 1, " " * cols, TEXT, RAISED)

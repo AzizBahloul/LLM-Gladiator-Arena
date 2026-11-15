@@ -27,13 +27,13 @@ class ModelScreen(ModalScreen):
     #picker { width: 96%; max-width: 110; height: 90%; background: $u-surface; border: round $u-ember; padding: 1 2; }
     #picker-title { text-style: bold; margin-bottom: 1; }
     #picker-cols { height: 1fr; }
-    #minds-col { width: 34; margin-right: 2; }
+    #minds-col { width: 40%; max-width: 34; min-width: 14; margin-right: 2; }
     #models-col { width: 1fr; }
     #minds, #models { height: 1fr; border: round $u-line; background: $u-bg; }
     #minds:focus, #models:focus { border: round $u-ember; }
     #filter { margin-bottom: 1; border: round $u-line; background: $u-bg; }
     #filter:focus { border: round $u-ember; }
-    #picker-actions { height: 3; margin-top: 1; }
+    #picker-actions { height: 3; margin-top: 1; overflow-x: auto; }
     #picker-actions Button { margin-right: 2; }
     #picker-note { color: $u-muted; height: auto; margin-top: 1; }
     ModelScreen OptionList { scrollbar-background: $u-surface; scrollbar-color: $u-line; scrollbar-color-hover: $u-faint; scrollbar-color-active: $u-ember; }
@@ -77,7 +77,19 @@ class ModelScreen(ModalScreen):
             self._note("Changing models needs a run on ollama. This run uses a test double or a hosted API.")
         else:
             self._note("Birth new mind: a new mind is born from the model on the right. Swap model: the mind on the left moves into it. Both land at the start of the next cycle.")
-        self.query_one("#models", OptionList).focus()
+        self.query_one("#filter", Input).focus()          # typing filters straight away; Down moves into the list
+
+    def on_key(self, event) -> None:
+        focused = self.focused
+        if isinstance(focused, Input) and event.key in ("down", "up"):
+            self.query_one("#models", OptionList).focus()
+            event.stop()
+        elif isinstance(focused, OptionList) and event.is_printable and event.character and event.character.strip():
+            box = self.query_one("#filter", Input)
+            box.focus()
+            box.value += event.character
+            box.cursor_position = len(box.value)
+            event.stop()
 
     def _note(self, message: str) -> None:
         self.query_one("#picker-note", Static).update(Text(message, style=C["muted"]))
@@ -160,14 +172,20 @@ class ModelScreen(ModalScreen):
 
     def _born(self) -> None:
         model = self._model()
-        if self.hub is None or not model:
+        if self.hub is None:
+            return
+        if not model:
+            self._note("Pick a model first. The list on the right is empty, so clear the filter.")
             return
         self.app.run_worker(lambda: self.game.request_newborn(model), thread=True)   # off the UI thread: it may download
         self._note(f"A new mind will be born from {model} at the start of the next cycle.")
 
     def _swap(self) -> None:
         model, name = self._model(), self._mind()
-        if self.hub is None or not model or not name:
+        if self.hub is None:
+            return
+        if not model or not name:
+            self._note("Pick a mind on the left and a model on the right first.")
             return
         self.app.run_worker(lambda: self.game.request_swap(name, model), thread=True)
         self._note(f"{name} will move into {model} at the start of the next cycle.")

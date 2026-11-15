@@ -24,7 +24,7 @@ class ChronicleWriter:
             self(ev)
 
     def _w(self, text: str) -> None:
-        with self.path.open("a", encoding="utf-8") as f:
+        with self.path.open("a", encoding="utf-8", errors="replace") as f:
             f.write(text)
 
     def __call__(self, ev: Event) -> None:

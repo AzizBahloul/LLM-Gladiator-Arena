@@ -25,7 +25,8 @@ class Completion:
 
 def clean(text: str) -> str:
     """Strip reasoning blocks some models emit."""
-    text = _THINK.sub("", text or "")
+    from arena.llm.parsing import scrub
+    text = _THINK.sub("", scrub(text or ""))
     if "<think>" in text.lower():  # unterminated: model ran out of tokens while thinking
         text = text[: text.lower().index("<think>")]
     return text.strip()

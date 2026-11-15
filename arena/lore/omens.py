@@ -125,7 +125,9 @@ def clean_effect(raw) -> Dict[str, float]:
         if k in raw and raw[k] is not None:
             try:
                 v = float(raw[k])
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if v != v:                       # NaN
                 continue
             v = max(lo, min(hi, v))
             if k in ("income", "decay", "siege_cost", "ember_shock", "ritual_mult", "haunt_mult", "gift_mult",

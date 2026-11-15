@@ -11,6 +11,27 @@ import re
 from typing import Any, Dict, Iterable, Optional
 
 
+_BAD_CHARS = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\ud800-\udfff]")
+
+
+def scrub(s: Any) -> Any:
+    """Make model text safe to show and to write to disk: no terminal escapes or other control characters
+    (a model could otherwise clear the screen or retitle the window), and no lone surrogates."""
+    if not isinstance(s, str):
+        return s
+    return _BAD_CHARS.sub(lambda m: "\ufffd" if "\ud800" <= m.group() <= "\udfff" else "", s)
+
+
+def scrub_obj(o: Any) -> Any:
+    if isinstance(o, str):
+        return scrub(o)
+    if isinstance(o, dict):
+        return {scrub(k) if isinstance(k, str) else k: scrub_obj(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [scrub_obj(v) for v in o]
+    return o
+
+
 def extract_json(text: str) -> Optional[Dict[str, Any]]:
     """Return the first JSON object found in text, or None."""
     if not text:
@@ -134,7 +155,7 @@ def trim_sentences(text: str, limit: int) -> str:
 
 def clean_speech(text: str, name: str = "", limit: int = 60) -> str:
     """Remove role labels, wrapping quotes and stage markup from a spoken line."""
-    t = (text or "").strip()
+    t = scrub(text or "").strip()
     t = re.sub(r"^\s*(?:\*\*)?" + re.escape(name) + r"(?:\*\*)?\s*[:\-]\s*", "", t, flags=re.IGNORECASE) if name else t
     t = re.sub(r"\*{1,2}(\w+)\*{1,2}", r"\1", t)   # *emphasis* on a single word is speech, keep it
     t = re.sub(r"\*[^*]{0,200}\*", " ", t)       # *stage directions*

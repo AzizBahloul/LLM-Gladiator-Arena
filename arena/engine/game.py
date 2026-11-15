@@ -292,7 +292,11 @@ class Game:
         if clash:
             self.emit("system", f"A newborn tried to be called {name}, which is taken or too easily confused with another name. Nobody arrives.", pace=False)
             return None
-        pid = "guest:" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+        pid = "guest:" + (re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "mind")
+        n = 1
+        while pid in s.guests and s.guests[pid].get("name") != name:    # "Mr. X" and "Mr X" must stay two people
+            n += 1
+            pid = f"guest:{re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-') or 'mind'}-{n}"
         h = int(hashlib.sha1(name.encode()).hexdigest(), 16)
         s.guests[pid] = dict(persona, color=GUEST_COLORS[h % len(GUEST_COLORS)])
         used = {w.directive_id for w in s.wicks.values()}

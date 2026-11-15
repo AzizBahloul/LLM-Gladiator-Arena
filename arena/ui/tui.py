@@ -120,9 +120,7 @@ class Masthead(Static):
             grid.add_row(mid, right)
         avail = max(10, (self.size.width or 80) - 6)
         omen = self.notice or "Waiting for the first Notice."
-        if len(omen) > avail:
-            omen = omen[: avail - 1].rstrip() + "…"
-        return Group(grid, Text(omen, style=C["faint"]))
+        return Group(grid, Text(omen, style=C["faint"], no_wrap=True, overflow="ellipsis"))
 
 
 class Roster(Static):
@@ -253,6 +251,7 @@ class Splash(Screen):
 # ==================================================================================== app ==
 class UndermindApp(App):
     TITLE = "The Undermind"
+    ENABLE_COMMAND_PALETTE = False     # its "quit" would leave the game thread running
 
     CSS = """
     Screen { background: $u-bg; color: $u-text; layout: vertical; }
@@ -339,8 +338,8 @@ class UndermindApp(App):
                 yield Roster(id="roster")
             with Vertical(id="centre"):
                 yield Theatre(id="theatre")
-                yield RichLog(id="stage", wrap=True, markup=False, highlight=False, min_width=20)
-            yield RichLog(id="parley", wrap=True, markup=False, highlight=False, min_width=20)
+                yield RichLog(id="stage", wrap=True, markup=False, highlight=False, min_width=20, max_lines=3000)
+            yield RichLog(id="parley", wrap=True, markup=False, highlight=False, min_width=20, max_lines=3000)
         yield StatusBar(id="status")
 
     def on_mount(self) -> None:
@@ -429,7 +428,7 @@ class UndermindApp(App):
         """Show what already happened in a resumed run, instantly and without the Theatre."""
         if not self.replay:
             return
-        for ev in self.replay:
+        for ev in self.replay[-800:]:      # a long run replays its recent past, not all of it
             if ev.kind == "arrival" and ev.data.get("color"):
                 F.register(ev.actor, ev.data["color"])
             if ev.kind == "notice" and ev.data.get("omen"):
@@ -489,6 +488,10 @@ class UndermindApp(App):
             hold = self.query_one(Theatre).feed(ev)
         except Exception:
             hold = 0.0
+            if not getattr(self, "_theatre_warned", False):       # a Theatre bug must not be invisible
+                self._theatre_warned = True
+                import logging, traceback
+                logging.getLogger("arena").warning("the Theatre failed on an event (shown once):\n%s", traceback.format_exc())
         self._present(ev)
         return hold
 
@@ -574,6 +577,11 @@ class UndermindApp(App):
         self._pace_i = max(0, min(len(PACES) - 1, self._pace_i + int(direction)))
         self.query_one(Theatre).speed = PACES[self._pace_i] / NATURAL_PACE
         self._refresh_status()
+
+    async def action_quit(self) -> None:
+        """Ctrl+Q and any other built-in quit path must stop the game too, never leave it playing unseen."""
+        self.game.stop()
+        self.exit()
 
     def action_leave(self) -> None:
         if self.finished or time.time() - self._quit_armed < 3.0:
